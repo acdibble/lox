@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "watch": "nodemon ./node_modules/.bin/tsc --watch src -e ts"
-  },
   "type": "module",
   "author": "",
   "license": "ISC",

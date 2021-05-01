@@ -126,5 +126,6 @@
     "@typescript-eslint/semi": [
       "error"
     ],
+    "max-classes-per-file": "off"
   }
 }
