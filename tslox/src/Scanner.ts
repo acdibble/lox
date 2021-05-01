@@ -165,6 +165,13 @@ export default class Scanner {
       case '/':
         if (this.match('/')) {
           while (this.peek() !== '\n' && !this.isAtEnd()) this.advance();
+        } else if (this.match('*')) {
+          while (this.peek() !== '*' && !this.match('/') && !this.isAtEnd()) {
+            const current = this.advance();
+            if (current === '\n') this.line++;
+          }
+          this.advance();
+          this.advance();
         } else {
           this.addToken(TokenType.Slash);
         }
