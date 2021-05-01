@@ -34,7 +34,6 @@ export default class Scanner {
     return this.isDigit(char) || this.isAlpha(char);
   }
 
-  private readonly tokens: Token[] = [];
   private start = 0;
   private current = 0;
   private line = 1;
@@ -48,12 +47,12 @@ export default class Scanner {
     return this.source[this.current++]!;
   }
 
-  private addToken(type: TokenType): void
-  private addToken(type: TokenType.String, literal: string): void
-  private addToken(type: TokenType.Number, literal: number): void
-  private addToken(type: TokenType, literal: any = null): void {
+  private createToken(type: TokenType): Token
+  private createToken(type: TokenType.String, literal: string): Token
+  private createToken(type: TokenType.Number, literal: number): Token
+  private createToken(type: TokenType, literal: any = null): Token {
     const text = this.source.slice(this.start, this.current);
-    this.tokens.push(new Token(type, text, literal, this.line));
+    return new Token(type, text, literal, this.line);
   }
 
   private match(expected: string): boolean {
@@ -72,7 +71,7 @@ export default class Scanner {
     return this.source[this.current + 1] ?? '\0';
   }
 
-  private string(): void {
+  private string(): Token | null {
     while (this.peek() !== '"' && !this.isAtEnd()) {
       if (this.peek() === '\n') this.line++;
       this.advance();
@@ -80,17 +79,17 @@ export default class Scanner {
 
     if (this.isAtEnd()) {
       this.error(this.line, 'Unterminated string.');
-      return;
+      return null;
     }
 
     // consume second "
     this.advance();
 
     const value = this.source.slice(this.start + 1, this.current - 1);
-    this.addToken(TokenType.String, value);
+    return this.createToken(TokenType.String, value);
   }
 
-  private number(): void {
+  private number(): Token {
     while (Scanner.isDigit(this.peek())) {
       this.advance();
     }
@@ -104,64 +103,50 @@ export default class Scanner {
       }
     }
 
-    this.addToken(TokenType.Number, Number.parseFloat(this.source.slice(this.start, this.current)));
+    return this.createToken(TokenType.Number, Number.parseFloat(this.source.slice(this.start, this.current)));
   }
 
-  private identifier(): void {
+  private identifier(): Token {
     while (Scanner.isAlphaNumeric(this.peek())) {
       this.advance();
     }
 
     const text = this.source.slice(this.start, this.current);
     const type = Scanner.keywords[text] ?? TokenType.Identifier;
-    this.addToken(type);
+    return this.createToken(type);
   }
 
-  private scanToken(): void {
+  private scanToken(): Token | null {
     const char = this.advance();
     switch (char) {
       case '(':
-        this.addToken(TokenType.LeftParen);
-        break;
+        return this.createToken(TokenType.LeftParen);
       case ')':
-        this.addToken(TokenType.RightParen);
-        break;
+        return this.createToken(TokenType.RightParen);
       case '{':
-        this.addToken(TokenType.LeftBrace);
-        break;
+        return this.createToken(TokenType.LeftBrace);
       case '}':
-        this.addToken(TokenType.RightBrace);
-        break;
+        return this.createToken(TokenType.RightBrace);
       case ',':
-        this.addToken(TokenType.Comma);
-        break;
+        return this.createToken(TokenType.Comma);
       case '.':
-        this.addToken(TokenType.Dot);
-        break;
+        return this.createToken(TokenType.Dot);
       case '-':
-        this.addToken(TokenType.Minus);
-        break;
+        return this.createToken(TokenType.Minus);
       case '+':
-        this.addToken(TokenType.Plus);
-        break;
+        return this.createToken(TokenType.Plus);
       case ';':
-        this.addToken(TokenType.Semicolon);
-        break;
+        return this.createToken(TokenType.Semicolon);
       case '*':
-        this.addToken(TokenType.Star);
-        break;
+        return this.createToken(TokenType.Star);
       case '!':
-        this.addToken(this.match('=') ? TokenType.BangEqual : TokenType.Bang);
-        break;
+        return this.createToken(this.match('=') ? TokenType.BangEqual : TokenType.Bang);
       case '=':
-        this.addToken(this.match('=') ? TokenType.EqualEqual : TokenType.Equal);
-        break;
+        return this.createToken(this.match('=') ? TokenType.EqualEqual : TokenType.Equal);
       case '<':
-        this.addToken(this.match('=') ? TokenType.LessEqual : TokenType.Less);
-        break;
+        return this.createToken(this.match('=') ? TokenType.LessEqual : TokenType.Less);
       case '>':
-        this.addToken(this.match('=') ? TokenType.GreaterEqual : TokenType.Greater);
-        break;
+        return this.createToken(this.match('=') ? TokenType.GreaterEqual : TokenType.Greater);
       case '/':
         if (this.match('/')) {
           while (this.peek() !== '\n' && !this.isAtEnd()) this.advance();
@@ -173,7 +158,7 @@ export default class Scanner {
           this.advance();
           this.advance();
         } else {
-          this.addToken(TokenType.Slash);
+          return this.createToken(TokenType.Slash);
         }
         break;
       case ' ':
@@ -184,35 +169,26 @@ export default class Scanner {
         this.line++;
         break;
       case '"':
-        this.string();
-        break;
+        return this.string();
       default:
-        if (Scanner.isDigit(char)) {
-          this.number();
-        } else if (Scanner.isAlpha(char)) {
-          this.identifier();
-        } else {
-          this.error(this.line, 'Unexpected character.');
-        }
-        break;
+        if (Scanner.isDigit(char)) return this.number();
+        if (Scanner.isAlpha(char)) return this.identifier();
+        this.error(this.line, 'Unexpected character.');
     }
+    return null;
   }
 
   private isAtEnd(): boolean {
     return this.current >= this.source.length;
   }
 
-  scanTokens(): Token[] {
+  * [Symbol.iterator](): IterableIterator<Token> {
     while (!this.isAtEnd()) {
       this.start = this.current;
-      this.scanToken();
+      const token = this.scanToken();
+      if (token) yield token;
     }
 
-    this.tokens.push(new Token(TokenType.EOF, '', null, this.line));
-    return this.tokens;
-  }
-
-  [Symbol.iterator](): IterableIterator<Token> {
-    return this.scanTokens()[Symbol.iterator]();
+    yield new Token(TokenType.EOF, '', null, this.line);
   }
 }

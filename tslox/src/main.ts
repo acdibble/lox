@@ -18,8 +18,7 @@ const error = (line: number, message: string): void => {
 export type LoxError = typeof error;
 
 const run = (text: string): void => {
-  const scanner = new Scanner(text, error);
-  for (const token of scanner) {
+  for (const token of new Scanner(text, error)) {
     console.log(token);
   }
 };
