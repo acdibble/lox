@@ -40,7 +40,7 @@ export default class Scanner {
 
   constructor(
     private readonly source: string,
-    private readonly error: LoxError,
+    private readonly loxError: LoxError,
   ) {}
 
   private advance(): string {
@@ -78,7 +78,7 @@ export default class Scanner {
     }
 
     if (this.isAtEnd()) {
-      this.error(this.line, 'Unterminated string.');
+      this.loxError(this.line, 'Unterminated string.');
       return null;
     }
 
@@ -173,7 +173,7 @@ export default class Scanner {
       default:
         if (Scanner.isDigit(char)) return this.number();
         if (Scanner.isAlpha(char)) return this.identifier();
-        this.error(this.line, 'Unexpected character.');
+        this.loxError(this.line, 'Unexpected character.');
     }
     return null;
   }

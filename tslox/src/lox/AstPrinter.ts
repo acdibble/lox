@@ -6,8 +6,6 @@ import {
   Unary,
   Visitor,
 } from './Expr.js';
-import Token from './Token.js';
-import TokenType from './TokenType.js';
 
 export default class AstPrinter implements Visitor<string> {
   print(expr: Expr): string {
@@ -36,18 +34,3 @@ export default class AstPrinter implements Visitor<string> {
     return this.parenthesize(expr.operator.lexeme, expr.right);
   }
 }
-
-const main = (): void => {
-  const expr = new Binary(
-    new Unary(
-      new Token(TokenType.Minus, '-', null, 1),
-      new Literal(123),
-    ),
-    new Token(TokenType.Star, '*', null, 1),
-    new Grouping(new Literal(45.67)),
-  );
-
-  console.log(new AstPrinter().print(expr));
-};
-
-main();

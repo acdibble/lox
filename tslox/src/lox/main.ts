@@ -1,26 +1,43 @@
 import * as fs from 'fs';
 import { createInterface } from 'readline';
+import AstPrinter from './AstPrinter.js';
+import Parser from './Parser.js';
 import Scanner from './Scanner.js';
+import type Token from './Token.js';
+import TokenType from './TokenType.js';
 
 let hadError = false;
 
 const report = (line: number, where: string, message: string): void => {
-  console.error(
-    `[line ${line}] Error${where}: ${message}`,
-  );
+  console.error(`[line ${line}] Error${where}: ${message}`);
   hadError = true;
 };
 
-const error = (line: number, message: string): void => {
-  report(line, '', message);
-};
+function error(token: Token, message: string): void;
+function error(line: number, message: string): void;
+function error(arg0: Token | number, message: string): void {
+  if (typeof arg0 === 'number') {
+    report(arg0, '', message);
+    return;
+  }
+
+  if (arg0.type === TokenType.EOF) {
+    report(arg0.line, ' at end', message);
+  } else {
+    report(arg0.line, ` at '${arg0.lexeme}'`, message);
+  }
+}
 
 export type LoxError = typeof error;
 
 const run = (text: string): void => {
-  for (const token of new Scanner(text, error)) {
-    console.log(token);
-  }
+  const tokens = [...new Scanner(text, error)];
+  const parser = new Parser(tokens, error);
+  const expression = parser.parse();
+
+  if (hadError || !expression) return;
+
+  console.log(new AstPrinter().print(expression));
 };
 
 const runFile = async (fileName: string): Promise<void> => {
