@@ -3,36 +3,39 @@ import * as fs from 'fs';
 const keys = Object.keys as <T>(obj: T) => (keyof T)[];
 const entries = Object.entries as <T>(obj: T) => [keyof T, T[keyof T]][];
 
-const defineAst = (baseName: string, classes: Record<string, Record<string, string>>): string => {
-  const header = `import Token from './Token.js';
+const defineAst = async (
+  handle: fs.promises.FileHandle,
+  baseName: string,
+  classes: Record<string, Record<string, string>>,
+): Promise<void> => {
+  await handle.write(`import Token from './Token.js';
 
 export abstract class ${baseName} {
   abstract accept<T>(visitor: Visitor<T>): T;
-}`;
+}\n`);
 
-  // eslint-disable-next-line arrow-body-style
-  const visitor = `export interface Visitor<T> {\n  ${keys(classes).map((className) => {
-    return `visit${className}${baseName}(${baseName.toLowerCase()}: ${className}): T;`;
-  }).join('\n  ')}\n}`;
+  await handle.write('\nexport interface Visitor<T> {\n');
 
-  const generatedClasses = entries(classes).map(([className, args]) => {
-    let classText = `export class ${className} extends Expr {
-  constructor(\n`;
+  for (const className of keys(classes)) {
+    await handle.write(`  visit${className}${baseName}(${baseName.toLowerCase()}: ${className}): T;\n`);
+  }
+
+  await handle.write('}\n');
+
+  for (const [className, args] of entries(classes)) {
+    await handle.write(`\nexport class ${className} extends Expr {
+  constructor(\n`);
     for (const [name, type] of entries(args)) {
-      classText += `    readonly ${name}: ${type},\n`;
+      await handle.write(`    readonly ${name}: ${type},\n`);
     }
-    classText += '  ) {\n';
-    classText += '    super();\n';
-    classText += '  }\n';
-    classText += '\n  accept<T>(visitor: Visitor<T>): T {\n';
-    classText += `    return visitor.visit${className}${baseName}(this);\n`;
-    classText += '  }\n';
-    classText += '}';
-
-    return classText;
-  });
-
-  return `${[header, visitor, generatedClasses.join('\n\n')].join('\n\n')}\n`;
+    await handle.write('  ) {\n');
+    await handle.write('    super();\n');
+    await handle.write('  }\n');
+    await handle.write('\n  accept<T>(visitor: Visitor<T>): T {\n');
+    await handle.write(`    return visitor.visit${className}${baseName}(this);\n`);
+    await handle.write('  }\n');
+    await handle.write('}\n');
+  }
 };
 
 const main = async (args = process.argv.slice(2)): Promise<void> => {
@@ -41,25 +44,29 @@ const main = async (args = process.argv.slice(2)): Promise<void> => {
     process.exit(64);
   }
 
-  const ast = defineAst('Expr', {
-    Binary: {
-      left: 'Expr',
-      operator: 'Token',
-      right: 'Expr',
-    },
-    Grouping: {
-      expression: 'Expr',
-    },
-    Literal: {
-      value: '{ toString(): string } | null',
-    },
-    Unary: {
-      operator: 'Token',
-      right: 'Expr',
-    },
-  });
+  const handle = await fs.promises.open(args[0]!, fs.constants.W_OK);
 
-  await fs.promises.writeFile(args[0]!, ast, 'utf8');
+  try {
+    await defineAst(handle, 'Expr', {
+      Binary: {
+        left: 'Expr',
+        operator: 'Token',
+        right: 'Expr',
+      },
+      Grouping: {
+        expression: 'Expr',
+      },
+      Literal: {
+        value: '{ toString(): string } | null',
+      },
+      Unary: {
+        operator: 'Token',
+        right: 'Expr',
+      },
+    });
+  } finally {
+    await handle.close();
+  }
 };
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
