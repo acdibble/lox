@@ -1,12 +1,14 @@
 import * as fs from 'fs';
 import { createInterface } from 'readline';
-import AstPrinter from './AstPrinter.js';
+import Interpeter from './Interpreter.js';
 import Parser from './Parser.js';
+import type RuntimeError from './RuntimeError.js';
 import Scanner from './Scanner.js';
 import type Token from './Token.js';
 import TokenType from './TokenType.js';
 
 let hadError = false;
+let hadRuntimeError = false;
 
 const report = (line: number, where: string, message: string): void => {
   console.error(`[line ${line}] Error${where}: ${message}`);
@@ -30,6 +32,15 @@ function error(arg0: Token | number, message: string): void {
 
 export type LoxError = typeof error;
 
+const runtimeError = (err: RuntimeError): void => {
+  console.error(`${err.message}\n[line ${err.token.line}]`);
+  hadRuntimeError = true;
+};
+
+const interpreter = new Interpeter(runtimeError);
+
+export type LoxRuntimeError = typeof runtimeError;
+
 const run = (text: string): void => {
   const tokens = [...new Scanner(text, error)];
   const parser = new Parser(tokens, error);
@@ -37,13 +48,14 @@ const run = (text: string): void => {
 
   if (hadError || !expression) return;
 
-  console.log(new AstPrinter().print(expression));
+  interpreter.interpret(expression);
 };
 
 const runFile = async (fileName: string): Promise<void> => {
   const file = await fs.promises.readFile(fileName, 'utf8');
   run(file);
   if (hadError) process.exit(65);
+  if (hadRuntimeError) process.exit(70);
 };
 
 const runPrompt = async (): Promise<void> => {
