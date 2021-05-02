@@ -4,6 +4,7 @@ enum TokenType {
   RightParen = 'RIGHT_PAREN',
   LeftBrace = 'LEFT_BRACE',
   RightBrace = 'RIGHT_BRACE',
+  Colon = 'COLON',
   Comma = 'COMMA',
   Dot = 'DOT',
   Minus = 'MINUS',
@@ -11,6 +12,7 @@ enum TokenType {
   Semicolon = 'SEMICOLON',
   Slash = 'SLASH',
   Star = 'STAR',
+  QuestionMark = 'QUESTION_MARK',
 
   // One or two character tokens.
   Bang = 'BANG',

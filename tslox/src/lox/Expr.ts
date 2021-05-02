@@ -10,6 +10,7 @@ export interface Visitor<T> {
   visitLiteralExpr(expr: Literal): T;
   visitUnaryExpr(expr: Unary): T;
   visitCommaExpr(expr: Comma): T;
+  visitTernaryExpr(expr: Ternary): T;
 }
 
 export class Binary extends Expr {
@@ -72,5 +73,19 @@ export class Comma extends Expr {
 
   accept<T>(visitor: Visitor<T>): T {
     return visitor.visitCommaExpr(this);
+  }
+}
+
+export class Ternary extends Expr {
+  constructor(
+    readonly condition: Expr,
+    readonly exprIfTrue: Expr,
+    readonly exprIfFalse: Expr,
+  ) {
+    super();
+  }
+
+  accept<T>(visitor: Visitor<T>): T {
+    return visitor.visitTernaryExpr(this);
   }
 }

@@ -66,6 +66,11 @@ const main = async (args = process.argv.slice(2)): Promise<void> => {
       Comma: {
         exprs: 'Expr[]',
       },
+      Ternary: {
+        condition: 'Expr',
+        exprIfTrue: 'Expr',
+        exprIfFalse: 'Expr',
+      },
     });
   } finally {
     await handle.close();

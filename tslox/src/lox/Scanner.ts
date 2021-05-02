@@ -139,6 +139,10 @@ export default class Scanner {
         return this.createToken(TokenType.Semicolon);
       case '*':
         return this.createToken(TokenType.Star);
+      case '?':
+        return this.createToken(TokenType.QuestionMark);
+      case ':':
+        return this.createToken(TokenType.Colon);
       case '!':
         return this.createToken(this.match('=') ? TokenType.BangEqual : TokenType.Bang);
       case '=':

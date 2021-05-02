@@ -4,6 +4,7 @@ import {
   Expr,
   Grouping,
   Literal,
+  Ternary,
   Unary,
   Visitor,
 } from './Expr.js';
@@ -37,5 +38,9 @@ export default class AstPrinter implements Visitor<string> {
 
   visitCommaExpr(expr: Comma): string {
     return this.parenthesize('comma', ...expr.exprs);
+  }
+
+  visitTernaryExpr(expr: Ternary): string {
+    return this.parenthesize('ternary', expr.condition, expr.exprIfTrue, expr.exprIfFalse);
   }
 }

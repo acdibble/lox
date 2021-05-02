@@ -4,6 +4,7 @@ import {
   Expr,
   Grouping,
   Literal,
+  Ternary,
   Unary,
 } from './Expr.js';
 import type { LoxError } from './main.js';
@@ -38,7 +39,16 @@ export default class Parser {
   }
 
   private expression(): Expr {
-    return this.equality();
+    const expr = this.equality();
+
+    if (this.match(TokenType.QuestionMark)) {
+      const exprIfTrue = this.expression();
+      this.consume(TokenType.Colon, "Expect ':' after expression");
+      const exprIfFalse = this.expression();
+      return new Ternary(expr, exprIfTrue, exprIfFalse);
+    }
+
+    return expr;
   }
 
   private equality(): Expr {
