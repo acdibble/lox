@@ -1,5 +1,6 @@
 import Expr from './Expr.js';
 import type { LoxError } from './main.js';
+import Stmt from './Stmt.js';
 import Token from './Token.js';
 import TokenType from './TokenType.js';
 
@@ -34,12 +35,13 @@ export default class Parser {
     private readonly loxError: LoxError,
   ) {}
 
-  parse(): Expr | null {
-    try {
-      return this.expression();
-    } catch (error) {
-      if (error instanceof ParserError) return null;
-      throw error;
+  parse(): Stmt[] {
+    return [...this];
+  }
+
+  * [Symbol.iterator](): IterableIterator<Stmt> {
+    while (!this.isAtEnd()) {
+      yield this.statement();
     }
   }
 
@@ -54,6 +56,23 @@ export default class Parser {
     }
 
     return expr;
+  }
+
+  private statement(): Stmt {
+    if (this.match(TokenType.Print)) return this.printStatement();
+    return this.expressionStatement();
+  }
+
+  private printStatement(): Stmt {
+    const value = this.expression();
+    this.consume(TokenType.Semicolon, "Expect ';' after value.");
+    return new Stmt.Print(value);
+  }
+
+  private expressionStatement(): Stmt {
+    const expr = this.expression();
+    this.consume(TokenType.Semicolon, "Expect ';' after expression.");
+    return new Stmt.Expression(expr);
   }
 
   private equality(): Expr {

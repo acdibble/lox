@@ -44,11 +44,11 @@ export type LoxRuntimeError = typeof runtimeError;
 const run = (text: string): void => {
   const tokens = [...new Scanner(text, error)];
   const parser = new Parser(tokens, error);
-  const expression = parser.parse();
+  const statements = parser.parse();
 
-  if (hadError || !expression) return;
+  if (hadError || !statements) return;
 
-  interpreter.interpret(expression);
+  interpreter.interpret(statements);
 };
 
 const runFile = async (fileName: string): Promise<void> => {

@@ -4,22 +4,25 @@
 import Expr from './Expr.js';
 import { LoxRuntimeError } from './main.js';
 import RuntimeError from './RuntimeError.js';
+import Stmt from './Stmt.js';
 import Token from './Token.js';
 import TokenType from './TokenType.js';
 
-export default class Interpeter implements Expr.Visitor<any> {
+export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void> {
   constructor(
     private readonly loxRuntimeError: LoxRuntimeError,
   ) {}
 
-  interpret(expression: Expr): void {
+  interpret(statements: Stmt[]): void {
     try {
-      const value = this.evaluate(expression);
-      console.log(this.stringify(value));
+      for (const statement of statements) {
+        this.execute(statement);
+      }
     } catch (error) {
       if (error instanceof RuntimeError) {
         this.loxRuntimeError(error);
       }
+      throw error;
     }
   }
 
@@ -102,6 +105,19 @@ export default class Interpeter implements Expr.Visitor<any> {
 
   private evaluate(expr: Expr): any {
     return expr.accept(this);
+  }
+
+  private execute(stmt: Stmt): void {
+    stmt.accept(this);
+  }
+
+  visitExpressionStmt(stmt: Stmt.Expression): void {
+    this.evaluate(stmt.expression);
+  }
+
+  visitPrintStmt(stmt: Stmt.Print): void {
+    const result = this.evaluate(stmt.expression);
+    console.log(this.stringify(result));
   }
 
   private isTruthy(value: any): boolean {
