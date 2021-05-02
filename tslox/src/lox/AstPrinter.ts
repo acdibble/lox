@@ -1,5 +1,6 @@
 import {
   Binary,
+  Comma,
   Expr,
   Grouping,
   Literal,
@@ -32,5 +33,9 @@ export default class AstPrinter implements Visitor<string> {
 
   visitUnaryExpr(expr: Unary): string {
     return this.parenthesize(expr.operator.lexeme, expr.right);
+  }
+
+  visitCommaExpr(expr: Comma): string {
+    return this.parenthesize('comma', ...expr.exprs);
   }
 }

@@ -63,6 +63,9 @@ const main = async (args = process.argv.slice(2)): Promise<void> => {
         operator: 'Token',
         right: 'Expr',
       },
+      Comma: {
+        exprs: 'Expr[]',
+      },
     });
   } finally {
     await handle.close();

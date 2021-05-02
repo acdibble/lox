@@ -1,5 +1,6 @@
 import {
   Binary,
+  Comma,
   Expr,
   Grouping,
   Literal,
@@ -108,9 +109,11 @@ export default class Parser {
     }
 
     if (this.match(TokenType.LeftParen)) {
-      const expr = this.expression();
+      const exprs = [this.expression()];
+      while (this.match(TokenType.Comma)) exprs.push(this.expression());
       this.consume(TokenType.RightParen, "Expect ')' after expression.");
-      return new Grouping(expr);
+      if (exprs.length === 1) return new Grouping(exprs[0]!);
+      return new Comma(exprs);
     }
 
     throw this.error(this.peek(), 'Expect expression.');
