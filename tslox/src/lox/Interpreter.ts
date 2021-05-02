@@ -9,14 +9,13 @@ import {
   Literal,
   Ternary,
   Unary,
-  Visitor,
 } from './Expr.js';
 import { LoxRuntimeError } from './main.js';
 import RuntimeError from './RuntimeError.js';
 import Token from './Token.js';
 import TokenType from './TokenType.js';
 
-export default class Interpeter implements Visitor<any> {
+export default class Interpeter implements Expr.Visitor<any> {
   constructor(
     private readonly loxRuntimeError: LoxRuntimeError,
   ) {}
@@ -126,6 +125,7 @@ export default class Interpeter implements Visitor<any> {
   private stringify(value: any): string {
     if (value == null) return 'nil';
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return value.toString!();
   }
 

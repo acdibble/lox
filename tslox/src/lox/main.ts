@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { createInterface } from 'readline';
-import Interpeter from './Interpreter.js';
+import Interpreter from './Interpreter.js';
 import Parser from './Parser.js';
 import type RuntimeError from './RuntimeError.js';
 import Scanner from './Scanner.js';
@@ -37,7 +37,7 @@ const runtimeError = (err: RuntimeError): void => {
   hadRuntimeError = true;
 };
 
-const interpreter = new Interpeter(runtimeError);
+const interpreter = new Interpreter(runtimeError);
 
 export type LoxRuntimeError = typeof runtimeError;
 

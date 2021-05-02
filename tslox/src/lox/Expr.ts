@@ -1,16 +1,20 @@
+/* eslint-disable @typescript-eslint/no-namespace */
+/* eslint-disable import/export */
 import Token from './Token.js';
 
 export abstract class Expr {
-  abstract accept<T>(visitor: Visitor<T>): T;
+  abstract accept<T>(visitor: Expr.Visitor<T>): T;
 }
 
-export interface Visitor<T> {
-  visitBinaryExpr(expr: Binary): T;
-  visitGroupingExpr(expr: Grouping): T;
-  visitLiteralExpr(expr: Literal): T;
-  visitUnaryExpr(expr: Unary): T;
-  visitCommaExpr(expr: Comma): T;
-  visitTernaryExpr(expr: Ternary): T;
+export namespace Expr {
+  export interface Visitor<T> {
+    visitBinaryExpr(expr: Binary): T;
+    visitGroupingExpr(expr: Grouping): T;
+    visitLiteralExpr(expr: Literal): T;
+    visitUnaryExpr(expr: Unary): T;
+    visitCommaExpr(expr: Comma): T;
+    visitTernaryExpr(expr: Ternary): T;
+  }
 }
 
 export class Binary extends Expr {
@@ -22,7 +26,7 @@ export class Binary extends Expr {
     super();
   }
 
-  accept<T>(visitor: Visitor<T>): T {
+  accept<T>(visitor: Expr.Visitor<T>): T {
     return visitor.visitBinaryExpr(this);
   }
 }
@@ -34,7 +38,7 @@ export class Grouping extends Expr {
     super();
   }
 
-  accept<T>(visitor: Visitor<T>): T {
+  accept<T>(visitor: Expr.Visitor<T>): T {
     return visitor.visitGroupingExpr(this);
   }
 }
@@ -46,7 +50,7 @@ export class Literal extends Expr {
     super();
   }
 
-  accept<T>(visitor: Visitor<T>): T {
+  accept<T>(visitor: Expr.Visitor<T>): T {
     return visitor.visitLiteralExpr(this);
   }
 }
@@ -59,7 +63,7 @@ export class Unary extends Expr {
     super();
   }
 
-  accept<T>(visitor: Visitor<T>): T {
+  accept<T>(visitor: Expr.Visitor<T>): T {
     return visitor.visitUnaryExpr(this);
   }
 }
@@ -71,7 +75,7 @@ export class Comma extends Expr {
     super();
   }
 
-  accept<T>(visitor: Visitor<T>): T {
+  accept<T>(visitor: Expr.Visitor<T>): T {
     return visitor.visitCommaExpr(this);
   }
 }
@@ -85,7 +89,7 @@ export class Ternary extends Expr {
     super();
   }
 
-  accept<T>(visitor: Visitor<T>): T {
+  accept<T>(visitor: Expr.Visitor<T>): T {
     return visitor.visitTernaryExpr(this);
   }
 }

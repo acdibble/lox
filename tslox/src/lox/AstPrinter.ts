@@ -6,10 +6,9 @@ import {
   Literal,
   Ternary,
   Unary,
-  Visitor,
 } from './Expr.js';
 
-export default class AstPrinter implements Visitor<string> {
+export default class AstPrinter implements Expr.Visitor<string> {
   print(expr: Expr): string {
     return expr.accept(this);
   }
