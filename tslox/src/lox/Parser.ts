@@ -1,12 +1,4 @@
-import {
-  Binary,
-  Comma,
-  Expr,
-  Grouping,
-  Literal,
-  Ternary,
-  Unary,
-} from './Expr.js';
+import Expr from './Expr.js';
 import type { LoxError } from './main.js';
 import Token from './Token.js';
 import TokenType from './TokenType.js';
@@ -58,7 +50,7 @@ export default class Parser {
       const exprIfTrue = this.expression();
       this.consume(TokenType.Colon, "Expect ':' after expression");
       const exprIfFalse = this.expression();
-      return new Ternary(expr, exprIfTrue, exprIfFalse);
+      return new Expr.Ternary(expr, exprIfTrue, exprIfFalse);
     }
 
     return expr;
@@ -70,7 +62,7 @@ export default class Parser {
     while (this.match(TokenType.BangEqual, TokenType.EqualEqual)) {
       const operator = this.previous();
       const right = this.comparison();
-      expr = new Binary(expr, operator, right);
+      expr = new Expr.Binary(expr, operator, right);
     }
 
     return expr;
@@ -82,7 +74,7 @@ export default class Parser {
     while (this.match(TokenType.Greater, TokenType.GreaterEqual, TokenType.Less, TokenType.LessEqual)) {
       const operator = this.previous();
       const right = this.term();
-      expr = new Binary(expr, operator, right);
+      expr = new Expr.Binary(expr, operator, right);
     }
 
     return expr;
@@ -94,7 +86,7 @@ export default class Parser {
     while (this.match(TokenType.Minus, TokenType.Plus)) {
       const operator = this.previous();
       const right = this.factor();
-      expr = new Binary(expr, operator, right);
+      expr = new Expr.Binary(expr, operator, right);
     }
 
     return expr;
@@ -106,7 +98,7 @@ export default class Parser {
     while (this.match(TokenType.Slash, TokenType.Star)) {
       const operator = this.previous();
       const right = this.unary();
-      expr = new Binary(expr, operator, right);
+      expr = new Expr.Binary(expr, operator, right);
     }
 
     return expr;
@@ -116,27 +108,27 @@ export default class Parser {
     if (this.match(TokenType.Bang, TokenType.Minus)) {
       const operator = this.previous();
       const right = this.unary();
-      return new Unary(operator, right);
+      return new Expr.Unary(operator, right);
     }
 
     return this.primary();
   }
 
   private primary(): Expr {
-    if (this.match(TokenType.False)) return new Literal(false);
-    if (this.match(TokenType.True)) return new Literal(true);
-    if (this.match(TokenType.Nil)) return new Literal(null);
+    if (this.match(TokenType.False)) return new Expr.Literal(false);
+    if (this.match(TokenType.True)) return new Expr.Literal(true);
+    if (this.match(TokenType.Nil)) return new Expr.Literal(null);
 
     if (this.match(TokenType.Number, TokenType.String)) {
-      return new Literal(this.previous().literal);
+      return new Expr.Literal(this.previous().literal);
     }
 
     if (this.match(TokenType.LeftParen)) {
       const exprs = [this.expression()];
       while (this.match(TokenType.Comma)) exprs.push(this.expression());
       this.consume(TokenType.RightParen, "Expect ')' after expression.");
-      if (exprs.length === 1) return new Grouping(exprs[0]!);
-      return new Comma(exprs);
+      if (exprs.length === 1) return new Expr.Grouping(exprs[0]!);
+      return new Expr.Comma(exprs);
     }
 
     if (this.handleMalformedBinaryExpression()) {

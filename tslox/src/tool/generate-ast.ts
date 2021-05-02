@@ -29,7 +29,7 @@ const astDefinitions = {
       exprIfTrue: 'Expr',
       exprIfFalse: 'Expr',
     },
-    imports: [['Token']],
+    imports: ['Token'],
   },
   Stmt: {
     Expression: {
@@ -38,22 +38,20 @@ const astDefinitions = {
     Print: {
       expression: 'Expr',
     },
-    imports: [['Expr', '{ Expr }']],
+    imports: ['Expr'],
   },
 } as const;
 
 const defineAst = async (handle: fs.promises.FileHandle, baseName: keyof typeof astDefinitions): Promise<void> => {
-  await handle.write(`/* eslint-disable @typescript-eslint/no-namespace */
-/* eslint-disable import/export */\n`);
   const { imports, ...classes } = astDefinitions[baseName];
-  for (const [fileName, im = fileName] of imports) {
-    await handle.write(`import ${im} from './${fileName}.js';\n`);
+  for (const im of imports) {
+    await handle.write(`import ${im} from './${im}.js';\n`);
   }
-  await handle.write(`\nexport abstract class ${baseName} {
+  await handle.write(`\nabstract class ${baseName} {
   abstract accept<T>(visitor: ${baseName}.Visitor<T>): T;
 }\n`);
 
-  await handle.write(`\nexport namespace ${baseName} {\n`);
+  await handle.write(`\nnamespace ${baseName} {\n`);
   await handle.write('  export interface Visitor<T> {\n');
 
   for (const className of keys(classes)) {
@@ -61,22 +59,23 @@ const defineAst = async (handle: fs.promises.FileHandle, baseName: keyof typeof 
   }
 
   await handle.write('  }\n');
-  await handle.write('}\n');
 
   for (const [className, args] of entries(classes)) {
-    await handle.write(`\nexport class ${className} extends ${baseName} {
-  constructor(\n`);
+    await handle.write(`\n  export class ${className} extends ${baseName} {
+    constructor(\n`);
     for (const [name, type] of entries(args)) {
-      await handle.write(`    readonly ${String(name)}: ${type},\n`);
+      await handle.write(`      readonly ${String(name)}: ${type},\n`);
     }
-    await handle.write('  ) {\n');
-    await handle.write('    super();\n');
+    await handle.write('    ) {\n');
+    await handle.write('      super();\n');
+    await handle.write('    }\n');
+    await handle.write(`\n    accept<T>(visitor: ${baseName}.Visitor<T>): T {\n`);
+    await handle.write(`      return visitor.visit${className}${baseName}(this);\n`);
+    await handle.write('    }\n');
     await handle.write('  }\n');
-    await handle.write(`\n  accept<T>(visitor: ${baseName}.Visitor<T>): T {\n`);
-    await handle.write(`    return visitor.visit${className}${baseName}(this);\n`);
-    await handle.write('  }\n');
-    await handle.write('}\n');
   }
+  await handle.write('}\n');
+  await handle.write(`\nexport default ${baseName};\n`);
 };
 
 const main = async (args = process.argv.slice(2)): Promise<void> => {

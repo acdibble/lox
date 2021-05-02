@@ -1,15 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable class-methods-use-this */
-import {
-  Binary,
-  Comma,
-  Expr,
-  Grouping,
-  Literal,
-  Ternary,
-  Unary,
-} from './Expr.js';
+import Expr from './Expr.js';
 import { LoxRuntimeError } from './main.js';
 import RuntimeError from './RuntimeError.js';
 import Token from './Token.js';
@@ -31,7 +23,7 @@ export default class Interpeter implements Expr.Visitor<any> {
     }
   }
 
-  visitBinaryExpr(expr: Binary): any {
+  visitBinaryExpr(expr: Expr.Binary): any {
     const left = this.evaluate(expr.left);
     const right = this.evaluate(expr.right);
 
@@ -72,15 +64,15 @@ export default class Interpeter implements Expr.Visitor<any> {
     }
   }
 
-  visitGroupingExpr(expr: Grouping): any {
+  visitGroupingExpr(expr: Expr.Grouping): any {
     return this.evaluate(expr.expression);
   }
 
-  visitLiteralExpr(expr: Literal): any {
+  visitLiteralExpr(expr: Expr.Literal): any {
     return expr.value;
   }
 
-  visitUnaryExpr(expr: Unary): any {
+  visitUnaryExpr(expr: Expr.Unary): any {
     const right = this.evaluate(expr.right);
 
     switch (expr.operator.type) {
@@ -94,11 +86,11 @@ export default class Interpeter implements Expr.Visitor<any> {
     }
   }
 
-  visitCommaExpr(expr: Comma): any {
+  visitCommaExpr(expr: Expr.Comma): any {
     return expr.exprs.reduce((acc, subexpr) => this.evaluate(subexpr));
   }
 
-  visitTernaryExpr(expr: Ternary): any {
+  visitTernaryExpr(expr: Expr.Ternary): any {
     const condition = this.evaluate(expr.condition);
 
     if (this.isTruthy(condition)) {
