@@ -63,9 +63,10 @@ export default class Interpeter implements Visitor<any> {
         this.checkNumberOperands(expr.operator, left, right);
         return left * right;
       case TokenType.Plus:
-        if (typeof right === 'number' && typeof left === 'number') return left + right;
-        if (typeof right === 'string' && typeof left === 'string') return left + right;
-        throw new RuntimeError(expr.operator, 'Operands must be two numbers or two strings.');
+        if (typeof left === 'string') return left + this.stringify(right);
+        if (typeof right === 'string') return this.stringify(left) + right;
+        this.checkNumberOperands(expr.operator, left, right);
+        return (left as number) + (right as number);
       default:
         throw new Error('unreachable');
     }
