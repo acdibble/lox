@@ -58,6 +58,7 @@ export default class Interpeter implements Visitor<any> {
         return left - right;
       case TokenType.Slash:
         this.checkNumberOperands(expr.operator, left, right);
+        if (right === 0) throw new RuntimeError(expr.operator, 'Cannot divide by zero.');
         return left / right;
       case TokenType.Star:
         this.checkNumberOperands(expr.operator, left, right);
