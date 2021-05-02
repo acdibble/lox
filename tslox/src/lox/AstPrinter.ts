@@ -1,6 +1,10 @@
 import Expr from './Expr.js';
 
 export default class AstPrinter implements Expr.Visitor<string> {
+  visitVariableExpr(expr: Expr.Variable): string {
+    throw new Error('Method not implemented.');
+  }
+
   print(expr: Expr): string {
     return expr.accept(this);
   }

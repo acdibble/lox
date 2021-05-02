@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable class-methods-use-this */
+import Environment from './Environment.js';
 import Expr from './Expr.js';
 import { LoxRuntimeError } from './main.js';
 import RuntimeError from './RuntimeError.js';
@@ -9,6 +10,8 @@ import Token from './Token.js';
 import TokenType from './TokenType.js';
 
 export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void> {
+  private readonly environment = new Environment();
+
   constructor(
     private readonly loxRuntimeError: LoxRuntimeError,
   ) {}
@@ -118,6 +121,16 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
   visitPrintStmt(stmt: Stmt.Print): void {
     const result = this.evaluate(stmt.expression);
     console.log(this.stringify(result));
+  }
+
+  visitVarStmt(stmt: Stmt.Var): void {
+    let value = null;
+    if (stmt.initializer !== null) value = this.evaluate(stmt.initializer);
+    this.environment.define(stmt.name.lexeme, value);
+  }
+
+  visitVariableExpr(expr: Expr.Variable): any {
+    return this.environment.get(expr.name);
   }
 
   private isTruthy(value: any): boolean {

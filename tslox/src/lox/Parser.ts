@@ -4,12 +4,12 @@ import Stmt from './Stmt.js';
 import Token from './Token.js';
 import TokenType from './TokenType.js';
 
-class ParserError extends Error {
+class ParseError extends Error {
   constructor() {
     super();
 
     if (!this.stack) {
-      Error.captureStackTrace(this, ParserError);
+      Error.captureStackTrace(this, ParseError);
     }
   }
 }
@@ -36,13 +36,12 @@ export default class Parser {
   ) {}
 
   parse(): Stmt[] {
-    return [...this];
-  }
-
-  * [Symbol.iterator](): IterableIterator<Stmt> {
+    const statements: Stmt[] = [];
     while (!this.isAtEnd()) {
-      yield this.statement();
+      const stmt = this.declaration();
+      if (stmt) statements.push(stmt);
     }
+    return statements;
   }
 
   private expression(): Expr {
@@ -58,6 +57,20 @@ export default class Parser {
     return expr;
   }
 
+  private declaration(): Stmt | null {
+    try {
+      if (this.match(TokenType.Var)) return this.varDeclaration();
+
+      return this.statement();
+    } catch (error) {
+      if (error instanceof ParseError) {
+        this.synchronize();
+        return null;
+      }
+      throw error;
+    }
+  }
+
   private statement(): Stmt {
     if (this.match(TokenType.Print)) return this.printStatement();
     return this.expressionStatement();
@@ -67,6 +80,16 @@ export default class Parser {
     const value = this.expression();
     this.consume(TokenType.Semicolon, "Expect ';' after value.");
     return new Stmt.Print(value);
+  }
+
+  private varDeclaration(): Stmt {
+    const name = this.consume(TokenType.Identifier, 'Expect variable name.');
+
+    let initializer = null;
+    if (this.match(TokenType.Equal)) initializer = this.expression();
+
+    this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
+    return new Stmt.Var(name, initializer);
   }
 
   private expressionStatement(): Stmt {
@@ -142,6 +165,10 @@ export default class Parser {
       return new Expr.Literal(this.previous().literal);
     }
 
+    if (this.match(TokenType.Identifier)) {
+      return new Expr.Variable(this.previous());
+    }
+
     if (this.match(TokenType.LeftParen)) {
       const exprs = [this.expression()];
       while (this.match(TokenType.Comma)) exprs.push(this.expression());
@@ -196,9 +223,9 @@ export default class Parser {
     return this.tokens[this.current - 1]!;
   }
 
-  private error(token: Token, message: string): ParserError {
+  private error(token: Token, message: string): ParseError {
     this.loxError(token, message);
-    return new ParserError();
+    return new ParseError();
   }
 
   private synchronize(): void {

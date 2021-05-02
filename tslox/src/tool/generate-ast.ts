@@ -29,6 +29,9 @@ const astDefinitions = {
       exprIfTrue: 'Expr',
       exprIfFalse: 'Expr',
     },
+    Variable: {
+      name: 'Token',
+    },
     imports: ['Token'],
   },
   Stmt: {
@@ -38,7 +41,11 @@ const astDefinitions = {
     Print: {
       expression: 'Expr',
     },
-    imports: ['Expr'],
+    Var: {
+      name: 'Token',
+      initializer: 'Expr | null',
+    },
+    imports: ['Expr', 'Token'],
   },
 } as const;
 

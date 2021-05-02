@@ -12,6 +12,7 @@ namespace Expr {
     visitUnaryExpr(expr: Unary): T;
     visitCommaExpr(expr: Comma): T;
     visitTernaryExpr(expr: Ternary): T;
+    visitVariableExpr(expr: Variable): T;
   }
 
   export class Binary extends Expr {
@@ -88,6 +89,18 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitTernaryExpr(this);
+    }
+  }
+
+  export class Variable extends Expr {
+    constructor(
+      readonly name: Token,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitVariableExpr(this);
     }
   }
 }
