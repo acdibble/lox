@@ -1,10 +1,12 @@
 import * as fs from 'fs';
 import { createInterface } from 'readline';
+import Expr from './Expr.js';
 import Interpreter from './Interpreter.js';
 import Parser from './Parser.js';
 import type RuntimeError from './RuntimeError.js';
 import Scanner from './Scanner.js';
-import type Token from './Token.js';
+import Stmt from './Stmt.js';
+import Token from './Token.js';
 import TokenType from './TokenType.js';
 
 let hadError = false;
@@ -41,13 +43,28 @@ const interpreter = new Interpreter(runtimeError);
 
 export type LoxRuntimeError = typeof runtimeError;
 
-const run = (text: string): void => {
+enum Mode {
+  File,
+  REPL,
+}
+
+const run = (text: string, mode = Mode.File): void => {
   const tokens = [...new Scanner(text, error)];
   const parser = new Parser(tokens, error);
   const statements = parser.parse();
-
-  if (hadError || !statements) return;
+  if (hadError || !statements.length) return;
+  let finalStmt: Stmt.Expression | null = null;
+  if (mode === Mode.REPL && statements[statements.length - 1] instanceof Stmt.Expression) {
+    finalStmt = statements.pop() as Stmt.Expression;
+  }
   interpreter.interpret(statements);
+  if (mode === Mode.REPL) {
+    const token = new Token(TokenType.Identifier, '_', null, 1);
+    interpreter.interpret([
+      new Stmt.Var(token, finalStmt && finalStmt.expression),
+      new Stmt.Print(new Expr.Variable(token)),
+    ]);
+  }
 };
 
 const runFile = async (fileName: string): Promise<void> => {
@@ -64,8 +81,13 @@ const runPrompt = async (): Promise<void> => {
   });
   try {
     while (true) {
-      const line = await questionAsync('> ');
-      run(line);
+      let line = await questionAsync('> ');
+      if (!line.endsWith(';')) line += ';';
+      try {
+        run(line, Mode.REPL);
+      } catch {
+        //
+      }
       hadError = false;
     }
   } finally {
