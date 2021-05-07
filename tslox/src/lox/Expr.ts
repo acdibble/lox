@@ -6,13 +6,27 @@ abstract class Expr {
 
 namespace Expr {
   export interface Visitor<T> {
+    visitAssignExpr(expr: Assign): T;
     visitBinaryExpr(expr: Binary): T;
+    visitCommaExpr(expr: Comma): T;
     visitGroupingExpr(expr: Grouping): T;
     visitLiteralExpr(expr: Literal): T;
-    visitUnaryExpr(expr: Unary): T;
-    visitCommaExpr(expr: Comma): T;
     visitTernaryExpr(expr: Ternary): T;
+    visitUnaryExpr(expr: Unary): T;
     visitVariableExpr(expr: Variable): T;
+  }
+
+  export class Assign extends Expr {
+    constructor(
+      readonly name: Token,
+      readonly value: Expr,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitAssignExpr(this);
+    }
   }
 
   export class Binary extends Expr {
@@ -26,6 +40,18 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitBinaryExpr(this);
+    }
+  }
+
+  export class Comma extends Expr {
+    constructor(
+      readonly exprs: Expr[],
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitCommaExpr(this);
     }
   }
 
@@ -53,31 +79,6 @@ namespace Expr {
     }
   }
 
-  export class Unary extends Expr {
-    constructor(
-      readonly operator: Token,
-      readonly right: Expr,
-    ) {
-      super();
-    }
-
-    accept<T>(visitor: Expr.Visitor<T>): T {
-      return visitor.visitUnaryExpr(this);
-    }
-  }
-
-  export class Comma extends Expr {
-    constructor(
-      readonly exprs: Expr[],
-    ) {
-      super();
-    }
-
-    accept<T>(visitor: Expr.Visitor<T>): T {
-      return visitor.visitCommaExpr(this);
-    }
-  }
-
   export class Ternary extends Expr {
     constructor(
       readonly condition: Expr,
@@ -89,6 +90,19 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitTernaryExpr(this);
+    }
+  }
+
+  export class Unary extends Expr {
+    constructor(
+      readonly operator: Token,
+      readonly right: Expr,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitUnaryExpr(this);
     }
   }
 

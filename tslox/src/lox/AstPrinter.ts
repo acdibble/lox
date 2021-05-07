@@ -1,10 +1,6 @@
 import Expr from './Expr.js';
 
 export default class AstPrinter implements Expr.Visitor<string> {
-  visitVariableExpr(expr: Expr.Variable): string {
-    throw new Error('Method not implemented.');
-  }
-
   print(expr: Expr): string {
     return expr.accept(this);
   }
@@ -37,5 +33,13 @@ export default class AstPrinter implements Expr.Visitor<string> {
 
   visitTernaryExpr(expr: Expr.Ternary): string {
     return this.parenthesize('ternary', expr.condition, expr.exprIfTrue, expr.exprIfFalse);
+  }
+
+  visitVariableExpr(expr: Expr.Variable): string {
+    return this.parenthesize('variable', expr);
+  }
+
+  visitAssignExpr(expr: Expr.Assign): string {
+    return this.parenthesize('assign', expr, expr.value);
   }
 }

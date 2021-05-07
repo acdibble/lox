@@ -45,16 +45,7 @@ export default class Parser {
   }
 
   private expression(): Expr {
-    const expr = this.equality();
-
-    if (this.match(TokenType.QuestionMark)) {
-      const exprIfTrue = this.expression();
-      this.consume(TokenType.Colon, "Expect ':' after expression");
-      const exprIfFalse = this.expression();
-      return new Expr.Ternary(expr, exprIfTrue, exprIfFalse);
-    }
-
-    return expr;
+    return this.assignment();
   }
 
   private declaration(): Stmt | null {
@@ -96,6 +87,37 @@ export default class Parser {
     const expr = this.expression();
     this.consume(TokenType.Semicolon, "Expect ';' after expression.");
     return new Stmt.Expression(expr);
+  }
+
+  private assignment(): Expr {
+    const expr = this.ternary();
+
+    if (this.match(TokenType.Equal)) {
+      const equals = this.previous();
+      const value = this.assignment();
+
+      if (expr instanceof Expr.Variable) {
+        const { name } = expr;
+        return new Expr.Assign(name, value);
+      }
+
+      this.loxError(equals, 'Invalid assignment target');
+    }
+
+    return expr;
+  }
+
+  private ternary(): Expr {
+    const expr = this.equality();
+
+    if (this.match(TokenType.QuestionMark)) {
+      const exprIfTrue = this.ternary();
+      this.consume(TokenType.Colon, "Expect ':' after expression");
+      const exprIfFalse = this.ternary();
+      return new Expr.Ternary(expr, exprIfTrue, exprIfFalse);
+    }
+
+    return expr;
   }
 
   private equality(): Expr {

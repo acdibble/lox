@@ -6,10 +6,17 @@ const entries = Object.entries as <T>(obj: T) => [keyof T, T[keyof T]][];
 
 const astDefinitions = {
   Expr: {
+    Assign: {
+      name: 'Token',
+      value: 'Expr',
+    },
     Binary: {
       left: 'Expr',
       operator: 'Token',
       right: 'Expr',
+    },
+    Comma: {
+      exprs: 'Expr[]',
     },
     Grouping: {
       expression: 'Expr',
@@ -17,17 +24,14 @@ const astDefinitions = {
     Literal: {
       value: '{ toString(): string } | null',
     },
-    Unary: {
-      operator: 'Token',
-      right: 'Expr',
-    },
-    Comma: {
-      exprs: 'Expr[]',
-    },
     Ternary: {
       condition: 'Expr',
       exprIfTrue: 'Expr',
       exprIfFalse: 'Expr',
+    },
+    Unary: {
+      operator: 'Token',
+      right: 'Expr',
     },
     Variable: {
       name: 'Token',

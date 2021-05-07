@@ -129,6 +129,12 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
     this.environment.define(stmt.name.lexeme, value);
   }
 
+  visitAssignExpr(expr: Expr.Assign): any {
+    const value = this.evaluate(expr.value);
+    this.environment.assign(expr.name, value);
+    return value;
+  }
+
   visitVariableExpr(expr: Expr.Variable): any {
     return this.environment.get(expr.name);
   }
