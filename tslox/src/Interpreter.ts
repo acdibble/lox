@@ -144,7 +144,7 @@ export default class Interpreter
   }
 
   visitVarStmt(stmt: Stmt.Var): void {
-    let value = null;
+    let value = Symbol.for("uninitialized");
     if (stmt.initializer !== null) value = this.evaluate(stmt.initializer);
     this.environment.define(stmt.name.lexeme, value);
   }

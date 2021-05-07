@@ -62,7 +62,10 @@ const run = (text: string, mode = Mode.File): void => {
   if (mode === Mode.REPL) {
     const token = new Token(TokenType.Identifier, "_", null, 1);
     interpreter.interpret([
-      new Stmt.Var(token, finalStmt && finalStmt.expression),
+      new Stmt.Var(
+        token,
+        finalStmt ? finalStmt.expression : new Expr.Literal(null),
+      ),
       new Stmt.Print(new Expr.Variable(token)),
     ]);
   }

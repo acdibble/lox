@@ -17,9 +17,15 @@ export default class Environment {
   }
 
   get(name: Token): any {
-    if (this.values.has(name.lexeme)) {
-      return this.values.get(name.lexeme);
+    const value = this.values.get(name.lexeme);
+    if (value === Symbol.for("uninitialized")) {
+      throw new RuntimeError(
+        name,
+        `Uninitialized variable '${name.lexeme}'.`,
+      );
     }
+
+    if (value !== undefined) return value;
 
     if (this.enclosing) return this.enclosing.get(name);
 
