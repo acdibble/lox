@@ -1,4 +1,3 @@
-import { readLines } from "https://deno.land/std@0.95.0/io/mod.ts";
 import Expr from "./Expr.ts";
 import Interpreter from "./Interpreter.ts";
 import Parser from "./Parser.ts";
@@ -76,19 +75,10 @@ const runFile = async (fileName: string): Promise<void> => {
   if (hadRuntimeError) Deno.exit(70);
 };
 
-const runPrompt = async (): Promise<void> => {
-  const buffer = new Uint8Array(1024);
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+const runPrompt = (): void => {
   while (true) {
-    Deno.stdout.write(encoder.encode("> "));
-    const len = await Deno.stdin.read(buffer);
-    buffer.fill(0);
-    if (len === null) return;
-    console.log(buffer.slice(0, len));
-    let line = decoder.decode(buffer.subarray(0, len));
-    console.log("line", line, [...line]);
-    return;
+    let line = prompt(">");
+    if (line === null) return;
     if (!line.endsWith(";")) line += ";";
     try {
       run(line, Mode.REPL);
@@ -96,7 +86,6 @@ const runPrompt = async (): Promise<void> => {
       //
     }
     hadError = false;
-    prompt();
   }
 };
 
@@ -109,7 +98,7 @@ const main = async (): Promise<void> => {
   } else if (args.length === 1) {
     await runFile(args[0]!);
   } else {
-    await runPrompt();
+    runPrompt();
   }
 };
 
