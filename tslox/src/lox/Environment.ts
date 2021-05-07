@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 
-import RuntimeError from './RuntimeError.js';
-import Token from './Token.js';
+import RuntimeError from "./RuntimeError.ts";
+import Token from "./Token.ts";
 
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 export default class Environment {

@@ -1,8 +1,8 @@
-import Expr from './Expr.js';
-import type { LoxError } from './main.js';
-import Stmt from './Stmt.js';
-import Token from './Token.js';
-import TokenType from './TokenType.js';
+import Expr from "./Expr.ts";
+import type { LoxError } from "./main.ts";
+import Stmt from "./Stmt.ts";
+import Token from "./Token.ts";
+import TokenType from "./TokenType.ts";
 
 class ParseError extends Error {
   constructor() {
@@ -75,7 +75,7 @@ export default class Parser {
   }
 
   private varDeclaration(): Stmt {
-    const name = this.consume(TokenType.Identifier, 'Expect variable name.');
+    const name = this.consume(TokenType.Identifier, "Expect variable name.");
 
     let initializer = null;
     if (this.match(TokenType.Equal)) initializer = this.expression();
@@ -113,7 +113,7 @@ export default class Parser {
         return new Expr.Assign(name, value);
       }
 
-      this.loxError(equals, 'Invalid assignment target');
+      this.loxError(equals, "Invalid assignment target");
     }
 
     return expr;
@@ -147,7 +147,14 @@ export default class Parser {
   private comparison(): Expr {
     let expr = this.term();
 
-    while (this.match(TokenType.Greater, TokenType.GreaterEqual, TokenType.Less, TokenType.LessEqual)) {
+    while (
+      this.match(
+        TokenType.Greater,
+        TokenType.GreaterEqual,
+        TokenType.Less,
+        TokenType.LessEqual,
+      )
+    ) {
       const operator = this.previous();
       const right = this.term();
       expr = new Expr.Binary(expr, operator, right);
@@ -215,7 +222,7 @@ export default class Parser {
       return this.expression();
     }
 
-    throw this.error(this.peek(), 'Expect expression.');
+    throw this.error(this.peek(), "Expect expression.");
   }
 
   private match(...types: TokenType[]): boolean {
@@ -287,9 +294,14 @@ export default class Parser {
 
   private handleMalformedBinaryExpression(): boolean {
     // eslint-disable-next-line prefer-spread
-    if (this.match.apply(this, Object.keys(this.discardFunctions) as TokenType[])) {
+    if (
+      this.match.apply(this, Object.keys(this.discardFunctions) as TokenType[])
+    ) {
       const operator = this.previous();
-      this.discardFunctions[operator.type as keyof typeof Parser.prototype.discardFunctions].call(this);
+      this
+        .discardFunctions[
+          operator.type as keyof typeof Parser.prototype.discardFunctions
+        ].call(this);
       this.error(operator, `Expect let hand operand for ${operator.lexeme}`);
       return true;
     }

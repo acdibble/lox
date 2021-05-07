@@ -1,13 +1,14 @@
-import Expr from './Expr.js';
-import Stmt from './Stmt.js';
+import Expr from "./Expr.ts";
+import Stmt from "./Stmt.ts";
 
-export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
+export default class AstPrinter
+  implements Expr.Visitor<string>, Stmt.Visitor<string> {
   print(stmts: Stmt[]): string {
-    return stmts.map((stmt) => stmt.accept(this)).join('\n');
+    return stmts.map((stmt) => stmt.accept(this)).join("\n");
   }
 
   private parenthesize(name: string, ...exprs: Expr[]): string {
-    return `(${name} ${exprs.map((expr) => expr.accept(this)).join(' ')})`;
+    return `(${name} ${exprs.map((expr) => expr.accept(this)).join(" ")})`;
   }
 
   visitBinaryExpr(expr: Expr.Binary): string {
@@ -15,12 +16,12 @@ export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<st
   }
 
   visitGroupingExpr(expr: Expr.Grouping): string {
-    return this.parenthesize('group', expr.expression);
+    return this.parenthesize("group", expr.expression);
   }
 
   // eslint-disable-next-line class-methods-use-this
   visitLiteralExpr(expr: Expr.Literal): string {
-    if (expr.value === null) return 'nil';
+    if (expr.value === null) return "nil";
     return expr.value.toString();
   }
 
@@ -29,11 +30,16 @@ export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<st
   }
 
   visitCommaExpr(expr: Expr.Comma): string {
-    return this.parenthesize('comma', ...expr.exprs);
+    return this.parenthesize("comma", ...expr.exprs);
   }
 
   visitTernaryExpr(expr: Expr.Ternary): string {
-    return this.parenthesize('ternary', expr.condition, expr.exprIfTrue, expr.exprIfFalse);
+    return this.parenthesize(
+      "ternary",
+      expr.condition,
+      expr.exprIfTrue,
+      expr.exprIfFalse,
+    );
   }
 
   visitVariableExpr(expr: Expr.Variable): string {
@@ -41,7 +47,7 @@ export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<st
   }
 
   visitAssignExpr(expr: Expr.Assign): string {
-    return this.parenthesize('assign', expr, expr.value);
+    return this.parenthesize("assign", expr, expr.value);
   }
 
   visitBlockStmt(stmt: Stmt.Block): string {
@@ -49,15 +55,17 @@ export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<st
   }
 
   visitExpressionStmt(stmt: Stmt.Expression): string {
-    return this.parenthesize('expression', stmt.expression);
+    return this.parenthesize("expression", stmt.expression);
   }
 
   visitPrintStmt(stmt: Stmt.Print): string {
-    return this.parenthesize('print', stmt.expression);
+    return this.parenthesize("print", stmt.expression);
   }
 
   visitVarStmt(stmt: Stmt.Var): string {
-    if (stmt.initializer === null) return this.parenthesize(`var ${stmt.name.lexeme} = nil`);
+    if (stmt.initializer === null) {
+      return this.parenthesize(`var ${stmt.name.lexeme} = nil`);
+    }
     return this.parenthesize(`var ${stmt.name.lexeme} =`, stmt.initializer);
   }
 }

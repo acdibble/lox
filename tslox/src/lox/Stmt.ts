@@ -1,5 +1,6 @@
-import Expr from './Expr.js';
-import Token from './Token.js';
+// deno-lint-ignore-file no-namespace
+import Expr from "./Expr.ts";
+import Token from "./Token.ts";
 
 abstract class Stmt {
   abstract accept<T>(visitor: Stmt.Visitor<T>): T;

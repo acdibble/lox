@@ -1,15 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable class-methods-use-this */
-import Environment from './Environment.js';
-import Expr from './Expr.js';
-import { LoxRuntimeError } from './main.js';
-import RuntimeError from './RuntimeError.js';
-import Stmt from './Stmt.js';
-import Token from './Token.js';
-import TokenType from './TokenType.js';
+import Environment from "./Environment.ts";
+import Expr from "./Expr.ts";
+import { LoxRuntimeError } from "./main.ts";
+import RuntimeError from "./RuntimeError.ts";
+import Stmt from "./Stmt.ts";
+import Token from "./Token.ts";
+import TokenType from "./TokenType.ts";
 
-export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void> {
+export default class Interpreter
+  implements Expr.Visitor<any>, Stmt.Visitor<void> {
   private environment = new Environment();
 
   constructor(
@@ -55,18 +56,20 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
         return left - right;
       case TokenType.Slash:
         this.checkNumberOperands(expr.operator, left, right);
-        if (right === 0) throw new RuntimeError(expr.operator, 'Cannot divide by zero.');
+        if (right === 0) {
+          throw new RuntimeError(expr.operator, "Cannot divide by zero.");
+        }
         return left / right;
       case TokenType.Star:
         this.checkNumberOperands(expr.operator, left, right);
         return left * right;
       case TokenType.Plus:
-        if (typeof left === 'string') return left + this.stringify(right);
-        if (typeof right === 'string') return this.stringify(left) + right;
+        if (typeof left === "string") return left + this.stringify(right);
+        if (typeof right === "string") return this.stringify(left) + right;
         this.checkNumberOperands(expr.operator, left, right);
         return (left as number) + (right as number);
       default:
-        throw new Error('unreachable');
+        throw new Error("unreachable");
     }
   }
 
@@ -88,7 +91,7 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
       case TokenType.Bang:
         return this.isTruthy(right);
       default:
-        throw new Error('unreachable');
+        throw new Error("unreachable");
     }
   }
 
@@ -158,7 +161,7 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
 
   private isTruthy(value: any): boolean {
     if (value === null) return false;
-    if (typeof value === 'boolean') return value;
+    if (typeof value === "boolean") return value;
     return true;
   }
 
@@ -167,19 +170,19 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
   }
 
   private stringify(value: any): string {
-    if (value == null) return 'nil';
+    if (value == null) return "nil";
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return value.toString!();
   }
 
   private checkNumberOperand(operator: Token, operand: any): void {
-    if (typeof operand === 'number') return;
-    throw new RuntimeError(operator, 'Operand must be a number');
+    if (typeof operand === "number") return;
+    throw new RuntimeError(operator, "Operand must be a number");
   }
 
   private checkNumberOperands(operator: Token, left: any, right: any): void {
-    if (typeof left === 'number' && typeof right === 'number') return;
-    throw new RuntimeError(operator, 'Operands must be numbers');
+    if (typeof left === "number" && typeof right === "number") return;
+    throw new RuntimeError(operator, "Operands must be numbers");
   }
 }

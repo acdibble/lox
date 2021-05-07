@@ -1,6 +1,6 @@
-import type { LoxError } from './main.js';
-import Token from './Token.js';
-import TokenType from './TokenType.js';
+import type { LoxError } from "./main.ts";
+import Token from "./Token.ts";
+import TokenType from "./TokenType.ts";
 
 export default class Scanner {
   static keywords: Record<string, TokenType> = {
@@ -23,11 +23,12 @@ export default class Scanner {
   };
 
   private static isDigit(char: string): boolean {
-    return char >= '0' && char <= '9';
+    return char >= "0" && char <= "9";
   }
 
   private static isAlpha(char: string): boolean {
-    return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char === '_';
+    return (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
+      char === "_";
   }
 
   private static isAlphaNumeric(char: string): boolean {
@@ -47,9 +48,9 @@ export default class Scanner {
     return this.source[this.current++]!;
   }
 
-  private createToken(type: TokenType): Token
-  private createToken(type: TokenType.String, literal: string): Token
-  private createToken(type: TokenType.Number, literal: number): Token
+  private createToken(type: TokenType): Token;
+  private createToken(type: TokenType.String, literal: string): Token;
+  private createToken(type: TokenType.Number, literal: number): Token;
   private createToken(type: TokenType, literal: any = null): Token {
     const text = this.source.slice(this.start, this.current);
     return new Token(type, text, literal, this.line);
@@ -64,21 +65,21 @@ export default class Scanner {
   }
 
   private peek(): string {
-    return this.source[this.current] ?? '\0';
+    return this.source[this.current] ?? "\0";
   }
 
   private peekNext(): string {
-    return this.source[this.current + 1] ?? '\0';
+    return this.source[this.current + 1] ?? "\0";
   }
 
   private string(): Token | null {
     while (this.peek() !== '"' && !this.isAtEnd()) {
-      if (this.peek() === '\n') this.line++;
+      if (this.peek() === "\n") this.line++;
       this.advance();
     }
 
     if (this.isAtEnd()) {
-      this.loxError(this.line, 'Unterminated string.');
+      this.loxError(this.line, "Unterminated string.");
       return null;
     }
 
@@ -94,7 +95,7 @@ export default class Scanner {
       this.advance();
     }
 
-    if (this.peek() === '.' && Scanner.isDigit(this.peekNext())) {
+    if (this.peek() === "." && Scanner.isDigit(this.peekNext())) {
       // consume the .
       this.advance();
 
@@ -103,7 +104,10 @@ export default class Scanner {
       }
     }
 
-    return this.createToken(TokenType.Number, Number.parseFloat(this.source.slice(this.start, this.current)));
+    return this.createToken(
+      TokenType.Number,
+      Number.parseFloat(this.source.slice(this.start, this.current)),
+    );
   }
 
   private identifier(): Token {
@@ -119,45 +123,53 @@ export default class Scanner {
   private scanToken(): Token | null {
     const char = this.advance();
     switch (char) {
-      case '(':
+      case "(":
         return this.createToken(TokenType.LeftParen);
-      case ')':
+      case ")":
         return this.createToken(TokenType.RightParen);
-      case '{':
+      case "{":
         return this.createToken(TokenType.LeftBrace);
-      case '}':
+      case "}":
         return this.createToken(TokenType.RightBrace);
-      case ',':
+      case ",":
         return this.createToken(TokenType.Comma);
-      case '.':
+      case ".":
         return this.createToken(TokenType.Dot);
-      case '-':
+      case "-":
         return this.createToken(TokenType.Minus);
-      case '+':
+      case "+":
         return this.createToken(TokenType.Plus);
-      case ';':
+      case ";":
         return this.createToken(TokenType.Semicolon);
-      case '*':
+      case "*":
         return this.createToken(TokenType.Star);
-      case '?':
+      case "?":
         return this.createToken(TokenType.QuestionMark);
-      case ':':
+      case ":":
         return this.createToken(TokenType.Colon);
-      case '!':
-        return this.createToken(this.match('=') ? TokenType.BangEqual : TokenType.Bang);
-      case '=':
-        return this.createToken(this.match('=') ? TokenType.EqualEqual : TokenType.Equal);
-      case '<':
-        return this.createToken(this.match('=') ? TokenType.LessEqual : TokenType.Less);
-      case '>':
-        return this.createToken(this.match('=') ? TokenType.GreaterEqual : TokenType.Greater);
-      case '/':
-        if (this.match('/')) {
-          while (this.peek() !== '\n' && !this.isAtEnd()) this.advance();
-        } else if (this.match('*')) {
-          while (this.peek() !== '*' && !this.match('/') && !this.isAtEnd()) {
+      case "!":
+        return this.createToken(
+          this.match("=") ? TokenType.BangEqual : TokenType.Bang,
+        );
+      case "=":
+        return this.createToken(
+          this.match("=") ? TokenType.EqualEqual : TokenType.Equal,
+        );
+      case "<":
+        return this.createToken(
+          this.match("=") ? TokenType.LessEqual : TokenType.Less,
+        );
+      case ">":
+        return this.createToken(
+          this.match("=") ? TokenType.GreaterEqual : TokenType.Greater,
+        );
+      case "/":
+        if (this.match("/")) {
+          while (this.peek() !== "\n" && !this.isAtEnd()) this.advance();
+        } else if (this.match("*")) {
+          while (this.peek() !== "*" && !this.match("/") && !this.isAtEnd()) {
             const current = this.advance();
-            if (current === '\n') this.line++;
+            if (current === "\n") this.line++;
           }
           this.advance();
           this.advance();
@@ -165,11 +177,11 @@ export default class Scanner {
           return this.createToken(TokenType.Slash);
         }
         break;
-      case ' ':
-      case '\r':
-      case '\t':
+      case " ":
+      case "\r":
+      case "\t":
         break;
-      case '\n':
+      case "\n":
         this.line++;
         break;
       case '"':
@@ -177,7 +189,7 @@ export default class Scanner {
       default:
         if (Scanner.isDigit(char)) return this.number();
         if (Scanner.isAlpha(char)) return this.identifier();
-        this.loxError(this.line, 'Unexpected character.');
+        this.loxError(this.line, "Unexpected character.");
     }
     return null;
   }
@@ -186,13 +198,13 @@ export default class Scanner {
     return this.current >= this.source.length;
   }
 
-  * [Symbol.iterator](): IterableIterator<Token> {
+  *[Symbol.iterator](): IterableIterator<Token> {
     while (!this.isAtEnd()) {
       this.start = this.current;
       const token = this.scanToken();
       if (token) yield token;
     }
 
-    yield new Token(TokenType.EOF, '', null, this.line);
+    yield new Token(TokenType.EOF, "", null, this.line);
   }
 }

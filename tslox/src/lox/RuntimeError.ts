@@ -1,4 +1,4 @@
-import Token from './Token.js';
+import Token from "./Token.ts";
 
 export default class RuntimeError extends TypeError {
   constructor(readonly token: Token, message: string) {
