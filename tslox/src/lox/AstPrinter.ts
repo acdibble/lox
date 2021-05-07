@@ -44,6 +44,10 @@ export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<st
     return this.parenthesize('assign', expr, expr.value);
   }
 
+  visitBlockStmt(stmt: Stmt.Block): string {
+    return this.parenthesize(`block ${this.print(stmt.statements)}`);
+  }
+
   visitExpressionStmt(stmt: Stmt.Expression): string {
     return this.parenthesize('expression', stmt.expression);
   }

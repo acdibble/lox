@@ -10,7 +10,7 @@ import Token from './Token.js';
 import TokenType from './TokenType.js';
 
 export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void> {
-  private readonly environment = new Environment();
+  private environment = new Environment();
 
   constructor(
     private readonly loxRuntimeError: LoxRuntimeError,
@@ -112,6 +112,23 @@ export default class Interpreter implements Expr.Visitor<any>, Stmt.Visitor<void
 
   private execute(stmt: Stmt): void {
     stmt.accept(this);
+  }
+
+  private executeBlock(statements: Stmt[], environment: Environment): void {
+    const previous = this.environment;
+    try {
+      this.environment = environment;
+
+      for (const statement of statements) {
+        this.execute(statement);
+      }
+    } finally {
+      this.environment = previous;
+    }
+  }
+
+  visitBlockStmt(stmt: Stmt.Block): void {
+    this.executeBlock(stmt.statements, new Environment(this.environment));
   }
 
   visitExpressionStmt(stmt: Stmt.Expression): void {

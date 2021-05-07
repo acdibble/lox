@@ -39,6 +39,9 @@ const astDefinitions = {
     imports: ['Token'],
   },
   Stmt: {
+    Block: {
+      statements: 'Stmt[]',
+    },
     Expression: {
       expression: 'Expr',
     },

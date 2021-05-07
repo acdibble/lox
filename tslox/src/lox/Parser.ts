@@ -64,6 +64,7 @@ export default class Parser {
 
   private statement(): Stmt {
     if (this.match(TokenType.Print)) return this.printStatement();
+    if (this.match(TokenType.LeftBrace)) return new Stmt.Block(this.block());
     return this.expressionStatement();
   }
 
@@ -87,6 +88,17 @@ export default class Parser {
     const expr = this.expression();
     this.consume(TokenType.Semicolon, "Expect ';' after expression.");
     return new Stmt.Expression(expr);
+  }
+
+  private block(): Stmt[] {
+    const statements: Stmt[] = [];
+
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      statements.push(this.declaration()!);
+    }
+
+    this.consume(TokenType.RightBrace, "Expect '}' after block.");
+    return statements;
   }
 
   private assignment(): Expr {
