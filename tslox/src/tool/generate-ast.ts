@@ -60,44 +60,45 @@ const defineAst = async (
   baseName: keyof typeof astDefinitions,
 ): Promise<void> => {
   const { imports, ...classes } = astDefinitions[baseName];
+  await write("// deno-lint-ignore-file no-namespace");
   for (const im of imports) {
-    await write(`import ${im} from './${im}.ts';\n`);
+    await write(`import ${im} from "./${im}.ts";`);
   }
   await write(`\nabstract class ${baseName} {
   abstract accept<T>(visitor: ${baseName}.Visitor<T>): T;
-}\n`);
+}`);
 
-  await write(`\nnamespace ${baseName} {\n`);
-  await write("  export interface Visitor<T> {\n");
+  await write(`\nnamespace ${baseName} {`);
+  await write("  export interface Visitor<T> {");
 
   for (const className of keys(classes)) {
     await write(
-      `    visit${className}${baseName}(${baseName.toLowerCase()}: ${className}): T;\n`,
+      `    visit${className}${baseName}(${baseName.toLowerCase()}: ${className}): T;`,
     );
   }
 
-  await write("  }\n");
+  await write("  }");
 
   for (const [className, args] of entries(classes)) {
     await write(`\n  export class ${className} extends ${baseName} {
-    constructor(\n`);
+    constructor(`);
     for (const [name, type] of entries(args)) {
-      await write(`      readonly ${String(name)}: ${type},\n`);
+      await write(`      readonly ${String(name)}: ${type},`);
     }
-    await write("    ) {\n");
-    await write("      super();\n");
-    await write("    }\n");
+    await write("    ) {");
+    await write("      super();");
+    await write("    }");
     await write(
-      `\n    accept<T>(visitor: ${baseName}.Visitor<T>): T {\n`,
+      `\n    accept<T>(visitor: ${baseName}.Visitor<T>): T {`,
     );
     await write(
-      `      return visitor.visit${className}${baseName}(this);\n`,
+      `      return visitor.visit${className}${baseName}(this);`,
     );
-    await write("    }\n");
-    await write("  }\n");
+    await write("    }");
+    await write("  }");
   }
-  await write("}\n");
-  await write(`\nexport default ${baseName};\n`);
+  await write("}");
+  await write(`\nexport default ${baseName};`);
 };
 
 const main = async (args = Deno.args): Promise<void> => {
@@ -108,9 +109,15 @@ const main = async (args = Deno.args): Promise<void> => {
   }
 
   for (const name of keys(astDefinitions)) {
-    const handle = await Deno.open(path.resolve(outputDir, `${name}.ts`));
+    const filename = path.resolve(outputDir, `${name}.ts`);
+    const handle = await Deno.open(filename, {
+      write: true,
+      truncate: true,
+      create: true,
+    });
     const encoder = new TextEncoder();
-    const write = (string: string) => handle.write(encoder.encode(string));
+    const write = (string: string) =>
+      handle.write(encoder.encode(`${string}\n`));
     try {
       await defineAst(write, name);
     } finally {
