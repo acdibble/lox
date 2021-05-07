@@ -76,14 +76,19 @@ const runFile = async (fileName: string): Promise<void> => {
   if (hadRuntimeError) Deno.exit(70);
 };
 
-const prompt = () =>
-  Deno.stdout.write(
-    Uint8Array.from("> ".split("").map((c) => c.charCodeAt(0))),
-  );
-
 const runPrompt = async (): Promise<void> => {
-  prompt();
-  for await (let line of readLines(Deno.stdin)) {
+  const buffer = new Uint8Array(1024);
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  while (true) {
+    Deno.stdout.write(encoder.encode("> "));
+    const len = await Deno.stdin.read(buffer);
+    buffer.fill(0);
+    if (len === null) return;
+    console.log(buffer.slice(0, len));
+    let line = decoder.decode(buffer.subarray(0, len));
+    console.log("line", line, [...line]);
+    return;
     if (!line.endsWith(";")) line += ";";
     try {
       run(line, Mode.REPL);
@@ -95,7 +100,9 @@ const runPrompt = async (): Promise<void> => {
   }
 };
 
-const main = async (args = Deno.args): Promise<void> => {
+const main = async (): Promise<void> => {
+  const args = [...Deno.args];
+  if (args[0]?.toLowerCase() === "lox") args.shift();
   if (args.length > 1) {
     console.error("Usage: tslox [script]");
     Deno.exit(64);
