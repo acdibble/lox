@@ -96,7 +96,7 @@ export default class Interpreter
   }
 
   visitCommaExpr(expr: Expr.Comma): any {
-    return expr.exprs.reduce((acc, subexpr) => this.evaluate(subexpr));
+    return expr.exprs.reduce((_acc, subexpr) => this.evaluate(subexpr), null);
   }
 
   visitTernaryExpr(expr: Expr.Ternary): any {
