@@ -1,8 +1,9 @@
 import Expr from './Expr.js';
+import Stmt from './Stmt.js';
 
-export default class AstPrinter implements Expr.Visitor<string> {
-  print(expr: Expr): string {
-    return expr.accept(this);
+export default class AstPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
+  print(stmts: Stmt[]): string {
+    return stmts.map((stmt) => stmt.accept(this)).join('\n');
   }
 
   private parenthesize(name: string, ...exprs: Expr[]): string {
@@ -36,10 +37,23 @@ export default class AstPrinter implements Expr.Visitor<string> {
   }
 
   visitVariableExpr(expr: Expr.Variable): string {
-    return this.parenthesize('variable', expr);
+    return this.parenthesize(`variable ${expr.name}`);
   }
 
   visitAssignExpr(expr: Expr.Assign): string {
     return this.parenthesize('assign', expr, expr.value);
+  }
+
+  visitExpressionStmt(stmt: Stmt.Expression): string {
+    return this.parenthesize('expression', stmt.expression);
+  }
+
+  visitPrintStmt(stmt: Stmt.Print): string {
+    return this.parenthesize('print', stmt.expression);
+  }
+
+  visitVarStmt(stmt: Stmt.Var): string {
+    if (stmt.initializer === null) return this.parenthesize(`var ${stmt.name.lexeme} = nil`);
+    return this.parenthesize(`var ${stmt.name.lexeme} =`, stmt.initializer);
   }
 }

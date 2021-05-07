@@ -47,7 +47,6 @@ const run = (text: string): void => {
   const statements = parser.parse();
 
   if (hadError || !statements) return;
-
   interpreter.interpret(statements);
 };
 
