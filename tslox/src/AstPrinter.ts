@@ -58,6 +58,13 @@ export default class AstPrinter
     return this.parenthesize("expression", stmt.expression);
   }
 
+  visitIfStmt(stmt: Stmt.If): string {
+    const stmts: Stmt[] = [stmt.thenBranch];
+    if (stmt.elseBranch) stmts.push(stmt.elseBranch);
+
+    return this.parenthesize(`if/else ${this.print(stmts)}`);
+  }
+
   visitPrintStmt(stmt: Stmt.Print): string {
     return this.parenthesize("print", stmt.expression);
   }

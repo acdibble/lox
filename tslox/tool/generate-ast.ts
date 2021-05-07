@@ -44,6 +44,11 @@ const astDefinitions = {
     Expression: {
       expression: "Expr",
     },
+    If: {
+      condition: "Expr",
+      thenBranch: "Stmt",
+      elseBranch: "Stmt | null",
+    },
     Print: {
       expression: "Expr",
     },

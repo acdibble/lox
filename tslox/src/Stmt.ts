@@ -10,6 +10,7 @@ namespace Stmt {
   export interface Visitor<T> {
     visitBlockStmt(stmt: Block): T;
     visitExpressionStmt(stmt: Expression): T;
+    visitIfStmt(stmt: If): T;
     visitPrintStmt(stmt: Print): T;
     visitVarStmt(stmt: Var): T;
   }
@@ -35,6 +36,20 @@ namespace Stmt {
 
     accept<T>(visitor: Stmt.Visitor<T>): T {
       return visitor.visitExpressionStmt(this);
+    }
+  }
+
+  export class If extends Stmt {
+    constructor(
+      readonly condition: Expr,
+      readonly thenBranch: Stmt,
+      readonly elseBranch: Stmt | null,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Stmt.Visitor<T>): T {
+      return visitor.visitIfStmt(this);
     }
   }
 

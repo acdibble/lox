@@ -63,9 +63,20 @@ export default class Parser {
   }
 
   private statement(): Stmt {
+    if (this.match(TokenType.If)) return this.ifStatement();
     if (this.match(TokenType.Print)) return this.printStatement();
     if (this.match(TokenType.LeftBrace)) return new Stmt.Block(this.block());
     return this.expressionStatement();
+  }
+
+  private ifStatement(): Stmt {
+    this.consume(TokenType.LeftParen, "Expect '(' after 'if'.");
+    const condition = this.expression();
+    this.consume(TokenType.RightParen, "Expect '(' after condition.");
+
+    const thenBranch = this.statement();
+    const elseBranch = this.match(TokenType.Else) ? this.statement() : null;
+    return new Stmt.If(condition, thenBranch, elseBranch);
   }
 
   private printStatement(): Stmt {

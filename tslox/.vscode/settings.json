@@ -4,6 +4,9 @@
   "deno.lint": true,
   "[typescript]": {
     "editor.defaultFormatter": "denoland.vscode-deno",
-    "editor.formatOnPaste": false
+    "editor.formatOnPaste": false,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": true
+    }
   }
 }

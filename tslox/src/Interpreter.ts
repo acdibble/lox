@@ -138,6 +138,14 @@ export default class Interpreter
     this.evaluate(stmt.expression);
   }
 
+  visitIfStmt(stmt: Stmt.If): void {
+    if (this.isTruthy(this.evaluate(stmt.condition))) {
+      this.execute(stmt.thenBranch);
+    } else if (stmt.elseBranch) {
+      this.execute(stmt.elseBranch);
+    }
+  }
+
   visitPrintStmt(stmt: Stmt.Print): void {
     const result = this.evaluate(stmt.expression);
     console.log(this.stringify(result));
