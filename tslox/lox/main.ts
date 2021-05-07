@@ -76,8 +76,13 @@ const runFile = async (fileName: string): Promise<void> => {
   if (hadRuntimeError) Deno.exit(70);
 };
 
+const prompt = () =>
+  Deno.stdout.write(
+    Uint8Array.from("> ".split("").map((c) => c.charCodeAt(0))),
+  );
+
 const runPrompt = async (): Promise<void> => {
-  console.log("> ");
+  prompt();
   for await (let line of readLines(Deno.stdin)) {
     if (!line.endsWith(";")) line += ";";
     try {
@@ -86,6 +91,7 @@ const runPrompt = async (): Promise<void> => {
       //
     }
     hadError = false;
+    prompt();
   }
 };
 
