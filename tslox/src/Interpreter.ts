@@ -73,12 +73,38 @@ export default class Interpreter
     }
   }
 
+  visitCommaExpr(expr: Expr.Comma): any {
+    return expr.exprs.reduce((_acc, subexpr) => this.evaluate(subexpr), null);
+  }
+
   visitGroupingExpr(expr: Expr.Grouping): any {
     return this.evaluate(expr.expression);
   }
 
   visitLiteralExpr(expr: Expr.Literal): any {
     return expr.value;
+  }
+
+  visitLogicalExpr(expr: Expr.Logical): any {
+    const left = this.evaluate(expr.left);
+
+    if (expr.operator.type === TokenType.Or) {
+      if (this.isTruthy(left)) return left;
+    } else {
+      if (!this.isTruthy(left)) return left;
+    }
+
+    return this.evaluate(expr.right);
+  }
+
+  visitTernaryExpr(expr: Expr.Ternary): any {
+    const condition = this.evaluate(expr.condition);
+
+    if (this.isTruthy(condition)) {
+      return this.evaluate(expr.exprIfTrue);
+    }
+
+    return this.evaluate(expr.exprIfFalse);
   }
 
   visitUnaryExpr(expr: Expr.Unary): any {
@@ -93,20 +119,6 @@ export default class Interpreter
       default:
         throw new Error("unreachable");
     }
-  }
-
-  visitCommaExpr(expr: Expr.Comma): any {
-    return expr.exprs.reduce((_acc, subexpr) => this.evaluate(subexpr), null);
-  }
-
-  visitTernaryExpr(expr: Expr.Ternary): any {
-    const condition = this.evaluate(expr.condition);
-
-    if (this.isTruthy(condition)) {
-      return this.evaluate(expr.exprIfTrue);
-    }
-
-    return this.evaluate(expr.exprIfFalse);
   }
 
   private evaluate(expr: Expr): any {

@@ -131,13 +131,37 @@ export default class Parser {
   }
 
   private ternary(): Expr {
-    const expr = this.equality();
+    const expr = this.or();
 
     if (this.match(TokenType.QuestionMark)) {
       const exprIfTrue = this.ternary();
       this.consume(TokenType.Colon, "Expect ':' after expression");
       const exprIfFalse = this.ternary();
       return new Expr.Ternary(expr, exprIfTrue, exprIfFalse);
+    }
+
+    return expr;
+  }
+
+  private or(): Expr {
+    let expr = this.and();
+
+    while (this.match(TokenType.Or)) {
+      const operator = this.previous();
+      const right = this.and();
+      expr = new Expr.Logical(expr, operator, right);
+    }
+
+    return expr;
+  }
+
+  private and(): Expr {
+    let expr = this.equality();
+
+    while (this.match(TokenType.And)) {
+      const operator = this.previous();
+      const right = this.equality();
+      expr = new Expr.Logical(expr, operator, right);
     }
 
     return expr;

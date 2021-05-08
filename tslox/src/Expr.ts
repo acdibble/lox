@@ -12,6 +12,7 @@ namespace Expr {
     visitCommaExpr(expr: Comma): T;
     visitGroupingExpr(expr: Grouping): T;
     visitLiteralExpr(expr: Literal): T;
+    visitLogicalExpr(expr: Logical): T;
     visitTernaryExpr(expr: Ternary): T;
     visitUnaryExpr(expr: Unary): T;
     visitVariableExpr(expr: Variable): T;
@@ -77,6 +78,20 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitLiteralExpr(this);
+    }
+  }
+
+  export class Logical extends Expr {
+    constructor(
+      readonly left: Expr,
+      readonly operator: Token,
+      readonly right: Expr,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitLogicalExpr(this);
     }
   }
 

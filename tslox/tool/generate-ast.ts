@@ -23,6 +23,11 @@ const astDefinitions = {
     Literal: {
       value: "{ toString(): string } | null",
     },
+    Logical: {
+      left: "Expr",
+      operator: "Token",
+      right: "Expr",
+    },
     Ternary: {
       condition: "Expr",
       exprIfTrue: "Expr",
