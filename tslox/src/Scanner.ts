@@ -5,6 +5,7 @@ import TokenType from "./TokenType.ts";
 export default class Scanner {
   static keywords: Record<string, TokenType> = {
     and: TokenType.And,
+    break: TokenType.Break,
     class: TokenType.Class,
     else: TokenType.Else,
     false: TokenType.False,

@@ -30,6 +30,8 @@ export default class Parser {
 
   private current = 0;
 
+  private inLoop = false;
+
   constructor(
     private readonly tokens: readonly Token[],
     private readonly loxError: LoxError,
@@ -63,6 +65,7 @@ export default class Parser {
   }
 
   private statement(): Stmt {
+    if (this.match(TokenType.Break)) return this.breakStatement();
     if (this.match(TokenType.For)) return this.forStatement();
     if (this.match(TokenType.If)) return this.ifStatement();
     if (this.match(TokenType.Print)) return this.printStatement();
@@ -71,42 +74,55 @@ export default class Parser {
     return this.expressionStatement();
   }
 
+  private breakStatement(): Stmt {
+    if (!this.inLoop) {
+      this.loxError(this.previous(), "Must be inside a loop to use 'break'.");
+    }
+    this.consume(TokenType.Semicolon, "Expect ';' after break statement.");
+    return new Stmt.Break();
+  }
+
   private forStatement(): Stmt {
-    this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
-    let initializer: Stmt | null;
-    if (this.match(TokenType.Semicolon)) {
-      initializer = null;
-    } else if (this.match(TokenType.Var)) {
-      initializer = this.varDeclaration();
-    } else {
-      initializer = this.expressionStatement();
+    this.inLoop = true;
+    try {
+      this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
+      let initializer: Stmt | null;
+      if (this.match(TokenType.Semicolon)) {
+        initializer = null;
+      } else if (this.match(TokenType.Var)) {
+        initializer = this.varDeclaration();
+      } else {
+        initializer = this.expressionStatement();
+      }
+
+      let condition: Expr | null = null;
+      if (!this.check(TokenType.Semicolon)) {
+        condition = this.expression();
+      }
+      this.consume(TokenType.Semicolon, "Expect ';' after loop condition.");
+
+      let increment: Expr | null = null;
+      if (!this.check(TokenType.RightParen)) {
+        increment = this.expression();
+      }
+      this.consume(TokenType.RightParen, "Expect ')' after for clauses.");
+      let body = this.statement();
+
+      if (increment !== null) {
+        body = new Stmt.Block([body, new Stmt.Expression(increment)]);
+      }
+
+      if (condition === null) condition = new Expr.Literal(true);
+      body = new Stmt.While(condition, body);
+
+      if (initializer !== null) {
+        body = new Stmt.Block([initializer, body]);
+      }
+
+      return body;
+    } finally {
+      this.inLoop = false;
     }
-
-    let condition: Expr | null = null;
-    if (!this.check(TokenType.Semicolon)) {
-      condition = this.expression();
-    }
-    this.consume(TokenType.Semicolon, "Expect ';' after loop condition.");
-
-    let increment: Expr | null = null;
-    if (!this.check(TokenType.RightParen)) {
-      increment = this.expression();
-    }
-    this.consume(TokenType.RightParen, "Expect ')' after for clauses.");
-    let body = this.statement();
-
-    if (increment !== null) {
-      body = new Stmt.Block([body, new Stmt.Expression(increment)]);
-    }
-
-    if (condition === null) condition = new Expr.Literal(true);
-    body = new Stmt.While(condition, body);
-
-    if (initializer !== null) {
-      body = new Stmt.Block([initializer, body]);
-    }
-
-    return body;
   }
 
   private ifStatement(): Stmt {
@@ -126,12 +142,17 @@ export default class Parser {
   }
 
   private whileStatement(): Stmt {
-    this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
-    const condition = this.expression();
-    this.consume(TokenType.RightParen, "Expect '(' after condition.");
-    const body = this.statement();
+    this.inLoop = true;
+    try {
+      this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+      const condition = this.expression();
+      this.consume(TokenType.RightParen, "Expect '(' after condition.");
+      const body = this.statement();
 
-    return new Stmt.While(condition, body);
+      return new Stmt.While(condition, body);
+    } finally {
+      this.inLoop = false;
+    }
   }
 
   private varDeclaration(): Stmt {

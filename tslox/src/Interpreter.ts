@@ -6,6 +6,8 @@ import Stmt from "./Stmt.ts";
 import Token from "./Token.ts";
 import TokenType from "./TokenType.ts";
 
+class BreakError extends Error {}
+
 export default class Interpreter
   implements Expr.Visitor<any>, Stmt.Visitor<void> {
   private environment = new Environment();
@@ -143,6 +145,10 @@ export default class Interpreter
     this.executeBlock(stmt.statements, new Environment(this.environment));
   }
 
+  visitBreakStmt(_stmt: Stmt.Break): void {
+    throw new BreakError();
+  }
+
   visitExpressionStmt(stmt: Stmt.Expression): void {
     this.evaluate(stmt.expression);
   }
@@ -167,8 +173,14 @@ export default class Interpreter
   }
 
   visitWhileStmt(stmt: Stmt.While): void {
-    while (this.isTruthy(this.evaluate(stmt.condition))) {
-      this.execute(stmt.body);
+    try {
+      while (this.isTruthy(this.evaluate(stmt.condition))) {
+        this.execute(stmt.body);
+      }
+    } catch (error) {
+      if (!(error instanceof BreakError)) {
+        throw error;
+      }
     }
   }
 

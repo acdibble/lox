@@ -9,6 +9,7 @@ abstract class Stmt {
 namespace Stmt {
   export interface Visitor<T> {
     visitBlockStmt(stmt: Block): T;
+    visitBreakStmt(stmt: Break): T;
     visitExpressionStmt(stmt: Expression): T;
     visitIfStmt(stmt: If): T;
     visitPrintStmt(stmt: Print): T;
@@ -25,6 +26,17 @@ namespace Stmt {
 
     accept<T>(visitor: Stmt.Visitor<T>): T {
       return visitor.visitBlockStmt(this);
+    }
+  }
+
+  export class Break extends Stmt {
+    constructor(
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Stmt.Visitor<T>): T {
+      return visitor.visitBreakStmt(this);
     }
   }
 

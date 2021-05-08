@@ -46,6 +46,7 @@ const astDefinitions = {
     Block: {
       statements: "Stmt[]",
     },
+    Break: {},
     Expression: {
       expression: "Expr",
     },
