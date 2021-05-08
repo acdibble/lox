@@ -9,6 +9,7 @@ namespace Expr {
   export interface Visitor<T> {
     visitAssignExpr(expr: Assign): T;
     visitBinaryExpr(expr: Binary): T;
+    visitCallExpr(expr: Call): T;
     visitCommaExpr(expr: Comma): T;
     visitGroupingExpr(expr: Grouping): T;
     visitLiteralExpr(expr: Literal): T;
@@ -42,6 +43,20 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitBinaryExpr(this);
+    }
+  }
+
+  export class Call extends Expr {
+    constructor(
+      readonly callee: Expr,
+      readonly paren: Token,
+      readonly args: Expr[],
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitCallExpr(this);
     }
   }
 

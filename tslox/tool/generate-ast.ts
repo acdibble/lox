@@ -14,6 +14,11 @@ const astDefinitions = {
       operator: "Token",
       right: "Expr",
     },
+    Call: {
+      callee: "Expr",
+      paren: "Token",
+      args: "Expr[]",
+    },
     Comma: {
       exprs: "Expr[]",
     },
@@ -49,6 +54,11 @@ const astDefinitions = {
     Break: {},
     Expression: {
       expression: "Expr",
+    },
+    Function: {
+      name: "Token",
+      params: "Token[]",
+      body: "Stmt[]",
     },
     If: {
       condition: "Expr",

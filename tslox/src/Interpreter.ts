@@ -1,5 +1,7 @@
 import Environment from "./Environment.ts";
 import Expr from "./Expr.ts";
+import LoxCallable from "./LoxCallable.ts";
+import LoxFunction from "./LoxFunction.ts";
 import { LoxRuntimeError } from "./main.ts";
 import RuntimeError from "./RuntimeError.ts";
 import Stmt from "./Stmt.ts";
@@ -10,11 +12,29 @@ class BreakError extends Error {}
 
 export default class Interpreter
   implements Expr.Visitor<any>, Stmt.Visitor<void> {
-  private environment = new Environment();
+  readonly globals = new Environment();
+  private environment = this.globals;
 
   constructor(
     private readonly loxRuntimeError: LoxRuntimeError,
-  ) {}
+  ) {
+    this.globals.define(
+      "clock",
+      new class extends LoxCallable {
+        arity(): number {
+          return 0;
+        }
+
+        call(_interpreter: Interpreter, _args: any[]): number {
+          return Date.now() / 1000;
+        }
+
+        toString(): string {
+          return "<native fn>";
+        }
+      }(),
+    );
+  }
 
   interpret(statements: Stmt[]): void {
     try {
@@ -70,6 +90,28 @@ export default class Interpreter
       default:
         throw new Error("unreachable");
     }
+  }
+
+  visitCallExpr(expr: Expr.Call): any {
+    const fn: LoxCallable | unknown = this.evaluate(expr.callee);
+
+    if (!(fn instanceof LoxCallable)) {
+      throw new RuntimeError(
+        expr.paren,
+        "Can only call functions and classes.",
+      );
+    }
+
+    const args = expr.args.map((arg) => this.evaluate(arg));
+
+    if (args.length != fn.arity()) {
+      throw new RuntimeError(
+        expr.paren,
+        `Expected ${fn.arity()} args but got ${args.length}.`,
+      );
+    }
+
+    return fn.call(this, args);
   }
 
   visitCommaExpr(expr: Expr.Comma): any {
@@ -128,7 +170,7 @@ export default class Interpreter
     stmt.accept(this);
   }
 
-  private executeBlock(statements: Stmt[], environment: Environment): void {
+  executeBlock(statements: Stmt[], environment: Environment): void {
     const previous = this.environment;
     try {
       this.environment = environment;
@@ -151,6 +193,11 @@ export default class Interpreter
 
   visitExpressionStmt(stmt: Stmt.Expression): void {
     this.evaluate(stmt.expression);
+  }
+
+  visitFunctionStmt(stmt: Stmt.Function): void {
+    const fn = new LoxFunction(stmt);
+    this.environment.define(stmt.name.lexeme, fn);
   }
 
   visitIfStmt(stmt: Stmt.If): void {

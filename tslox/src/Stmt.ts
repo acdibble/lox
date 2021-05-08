@@ -11,6 +11,7 @@ namespace Stmt {
     visitBlockStmt(stmt: Block): T;
     visitBreakStmt(stmt: Break): T;
     visitExpressionStmt(stmt: Expression): T;
+    visitFunctionStmt(stmt: Function): T;
     visitIfStmt(stmt: If): T;
     visitPrintStmt(stmt: Print): T;
     visitVarStmt(stmt: Var): T;
@@ -49,6 +50,20 @@ namespace Stmt {
 
     accept<T>(visitor: Stmt.Visitor<T>): T {
       return visitor.visitExpressionStmt(this);
+    }
+  }
+
+  export class Function extends Stmt {
+    constructor(
+      readonly name: Token,
+      readonly params: Token[],
+      readonly body: Stmt[],
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Stmt.Visitor<T>): T {
+      return visitor.visitFunctionStmt(this);
     }
   }
 

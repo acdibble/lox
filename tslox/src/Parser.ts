@@ -66,6 +66,7 @@ export default class Parser {
 
   private statement(): Stmt {
     if (this.match(TokenType.Break)) return this.breakStatement();
+    if (this.match(TokenType.Fun)) return this.function("function");
     if (this.match(TokenType.For)) return this.forStatement();
     if (this.match(TokenType.If)) return this.ifStatement();
     if (this.match(TokenType.Print)) return this.printStatement();
@@ -169,6 +170,28 @@ export default class Parser {
     const expr = this.expression();
     this.consume(TokenType.Semicolon, "Expect ';' after expression.");
     return new Stmt.Expression(expr);
+  }
+
+  private function(kind: string): Stmt.Function {
+    const name = this.consume(TokenType.Identifier, `Expect ${kind} name.`);
+    this.consume(TokenType.LeftParen, `Expect '(' after ${kind} name.`);
+    const parameters: Token[] = [];
+    if (!this.check(TokenType.RightParen)) {
+      do {
+        if (parameters.length >= 255) {
+          this.error(this.peek(), "Can't have more than 255 parameters.");
+        }
+
+        parameters.push(
+          this.consume(TokenType.Identifier, "Expect parameter name."),
+        );
+      } while (this.match(TokenType.Comma));
+    }
+    this.consume(TokenType.RightParen, "Expect ')' after parameters.");
+
+    this.consume(TokenType.LeftBrace, `Expect '{' before ${kind} body.`);
+    const body = this.block();
+    return new Stmt.Function(name, parameters, body);
   }
 
   private block(): Stmt[] {
@@ -299,7 +322,41 @@ export default class Parser {
       return new Expr.Unary(operator, right);
     }
 
-    return this.primary();
+    return this.call();
+  }
+
+  private finishCall(callee: Expr): Expr {
+    const args: Expr[] = [];
+
+    if (!this.check(TokenType.RightParen)) {
+      do {
+        if (args.length >= 255) {
+          this.error(this.peek(), "Can't have more than 255 arguments.");
+        }
+        args.push(this.expression());
+      } while (this.match(TokenType.Comma));
+    }
+
+    const paren = this.consume(
+      TokenType.RightParen,
+      "Expect ')' after args.",
+    );
+
+    return new Expr.Call(callee, paren, args);
+  }
+
+  private call(): Expr {
+    let expr = this.primary();
+
+    while (true) {
+      if (this.match(TokenType.LeftParen)) {
+        expr = this.finishCall(expr);
+      } else {
+        break;
+      }
+    }
+
+    return expr;
   }
 
   private primary(): Expr {
