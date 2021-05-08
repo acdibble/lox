@@ -14,6 +14,7 @@ namespace Stmt {
     visitFunctionStmt(stmt: Function): T;
     visitIfStmt(stmt: If): T;
     visitPrintStmt(stmt: Print): T;
+    visitReturnStmt(stmt: Return): T;
     visitVarStmt(stmt: Var): T;
     visitWhileStmt(stmt: While): T;
   }
@@ -90,6 +91,19 @@ namespace Stmt {
 
     accept<T>(visitor: Stmt.Visitor<T>): T {
       return visitor.visitPrintStmt(this);
+    }
+  }
+
+  export class Return extends Stmt {
+    constructor(
+      readonly keyword: Token,
+      readonly value: Expr | null,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Stmt.Visitor<T>): T {
+      return visitor.visitReturnStmt(this);
     }
   }
 

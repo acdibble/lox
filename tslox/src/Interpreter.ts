@@ -5,6 +5,7 @@ import LoxFunction from "./LoxFunction.ts";
 import { LoxRuntimeError } from "./main.ts";
 import RuntimeError from "./RuntimeError.ts";
 import Stmt from "./Stmt.ts";
+import Return from "./Return.ts";
 import Token from "./Token.ts";
 import TokenType from "./TokenType.ts";
 
@@ -47,6 +48,12 @@ export default class Interpreter
       }
       throw error;
     }
+  }
+
+  visitAssignExpr(expr: Expr.Assign): any {
+    const value = this.evaluate(expr.value);
+    this.environment.assign(expr.name, value);
+    return value;
   }
 
   visitBinaryExpr(expr: Expr.Binary): any {
@@ -162,6 +169,10 @@ export default class Interpreter
     }
   }
 
+  visitVariableExpr(expr: Expr.Variable): any {
+    return this.environment.get(expr.name);
+  }
+
   private evaluate(expr: Expr): any {
     return expr.accept(this);
   }
@@ -213,6 +224,11 @@ export default class Interpreter
     console.log(this.stringify(result));
   }
 
+  visitReturnStmt(stmt: Stmt.Return): void {
+    const value = stmt.value && this.evaluate(stmt.value);
+    throw new Return(value);
+  }
+
   visitVarStmt(stmt: Stmt.Var): void {
     let value = Symbol.for("uninitialized");
     if (stmt.initializer !== null) value = this.evaluate(stmt.initializer);
@@ -229,16 +245,6 @@ export default class Interpreter
         throw error;
       }
     }
-  }
-
-  visitAssignExpr(expr: Expr.Assign): any {
-    const value = this.evaluate(expr.value);
-    this.environment.assign(expr.name, value);
-    return value;
-  }
-
-  visitVariableExpr(expr: Expr.Variable): any {
-    return this.environment.get(expr.name);
   }
 
   private isTruthy(value: any): boolean {

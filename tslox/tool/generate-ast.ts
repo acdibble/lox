@@ -68,6 +68,10 @@ const astDefinitions = {
     Print: {
       expression: "Expr",
     },
+    Return: {
+      keyword: "Token",
+      value: "Expr | null",
+    },
     Var: {
       name: "Token",
       initializer: "Expr | null",
