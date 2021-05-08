@@ -298,7 +298,7 @@ export default class Parser {
       const exprs = [this.expression()];
       while (this.match(TokenType.Comma)) exprs.push(this.expression());
       this.consume(TokenType.RightParen, "Expect ')' after expression.");
-      if (exprs.length === 1) return new Expr.Grouping(exprs[0]!);
+      if (exprs.length === 1) return new Expr.Grouping(exprs[0]);
       return new Expr.Comma(exprs);
     }
 
@@ -359,7 +359,6 @@ export default class Parser {
     while (!this.isAtEnd()) {
       if (this.previous().type === TokenType.Semicolon) return;
 
-      // eslint-disable-next-line default-case
       switch (this.peek().type) {
         case TokenType.Class:
         case TokenType.Fun:

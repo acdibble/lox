@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import TokenType from "./TokenType.ts";
 
 export default class Token {

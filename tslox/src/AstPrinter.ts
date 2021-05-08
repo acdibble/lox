@@ -19,7 +19,6 @@ export default class AstPrinter
     return this.parenthesize("group", expr.expression);
   }
 
-  // eslint-disable-next-line class-methods-use-this
   visitLiteralExpr(expr: Expr.Literal): string {
     if (expr.value === null) return "nil";
     return expr.value.toString();

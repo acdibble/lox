@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable class-methods-use-this */
 import Environment from "./Environment.ts";
 import Expr from "./Expr.ts";
 import { LoxRuntimeError } from "./main.ts";
@@ -198,7 +195,6 @@ export default class Interpreter
   private stringify(value: any): string {
     if (value == null) return "nil";
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     return value.toString!();
   }
 

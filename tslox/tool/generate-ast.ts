@@ -140,5 +140,4 @@ const main = async (args = Deno.args): Promise<void> => {
   }
 };
 
-// eslint-disable-next-line @typescript-eslint/no-floating-promises
 main();

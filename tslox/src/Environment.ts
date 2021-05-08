@@ -1,10 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-
 import RuntimeError from "./RuntimeError.ts";
 import Token from "./Token.ts";
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 export default class Environment {
   private readonly values: Map<string, any> = new Map();
 
