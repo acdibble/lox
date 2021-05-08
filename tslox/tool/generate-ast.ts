@@ -61,6 +61,10 @@ const astDefinitions = {
       name: "Token",
       initializer: "Expr | null",
     },
+    While: {
+      condition: "Expr",
+      body: "Stmt",
+    },
     imports: ["Expr", "Token"],
   },
 } as const;

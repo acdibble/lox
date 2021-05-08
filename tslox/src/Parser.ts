@@ -65,6 +65,7 @@ export default class Parser {
   private statement(): Stmt {
     if (this.match(TokenType.If)) return this.ifStatement();
     if (this.match(TokenType.Print)) return this.printStatement();
+    if (this.match(TokenType.While)) return this.whileStatement();
     if (this.match(TokenType.LeftBrace)) return new Stmt.Block(this.block());
     return this.expressionStatement();
   }
@@ -83,6 +84,15 @@ export default class Parser {
     const value = this.expression();
     this.consume(TokenType.Semicolon, "Expect ';' after value.");
     return new Stmt.Print(value);
+  }
+
+  private whileStatement(): Stmt {
+    this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+    const condition = this.expression();
+    this.consume(TokenType.RightParen, "Expect '(' after condition.");
+    const body = this.statement();
+
+    return new Stmt.While(condition, body);
   }
 
   private varDeclaration(): Stmt {

@@ -169,6 +169,12 @@ export default class Interpreter
     this.environment.define(stmt.name.lexeme, value);
   }
 
+  visitWhileStmt(stmt: Stmt.While): void {
+    while (this.isTruthy(this.evaluate(stmt.condition))) {
+      this.execute(stmt.body);
+    }
+  }
+
   visitAssignExpr(expr: Expr.Assign): any {
     const value = this.evaluate(expr.value);
     this.environment.assign(expr.name, value);

@@ -13,6 +13,7 @@ namespace Stmt {
     visitIfStmt(stmt: If): T;
     visitPrintStmt(stmt: Print): T;
     visitVarStmt(stmt: Var): T;
+    visitWhileStmt(stmt: While): T;
   }
 
   export class Block extends Stmt {
@@ -75,6 +76,19 @@ namespace Stmt {
 
     accept<T>(visitor: Stmt.Visitor<T>): T {
       return visitor.visitVarStmt(this);
+    }
+  }
+
+  export class While extends Stmt {
+    constructor(
+      readonly condition: Expr,
+      readonly body: Stmt,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Stmt.Visitor<T>): T {
+      return visitor.visitWhileStmt(this);
     }
   }
 }
