@@ -7,12 +7,13 @@ import Return from "./Return.ts";
 export default class LoxFunction extends LoxCallable {
   constructor(
     private readonly declaration: Stmt.Function,
+    private readonly closure: Environment,
   ) {
     super();
   }
 
   call(interpreter: Interpreter, args: any[]): any {
-    const environment = new Environment(interpreter.globals);
+    const environment = new Environment(this.closure);
     for (let i = 0; i < args.length; i++) {
       environment.define(this.declaration.params[i].lexeme, args[i]);
     }
