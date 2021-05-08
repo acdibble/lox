@@ -15,18 +15,18 @@ class ParseError extends Error {
 }
 
 export default class Parser {
-  private readonly discardFunctions = {
-    [TokenType.BangEqual]: this.comparison,
-    [TokenType.EqualEqual]: this.comparison,
-    [TokenType.Greater]: this.term,
-    [TokenType.GreaterEqual]: this.term,
-    [TokenType.Less]: this.term,
-    [TokenType.LessEqual]: this.term,
-    [TokenType.Minus]: this.factor,
-    [TokenType.Plus]: this.factor,
-    [TokenType.Slash]: this.unary,
-    [TokenType.Star]: this.unary,
-  } as const;
+  private readonly discardFunctions = new Map([
+    [TokenType.BangEqual, this.comparison],
+    [TokenType.EqualEqual, this.comparison],
+    [TokenType.Greater, this.term],
+    [TokenType.GreaterEqual, this.term],
+    [TokenType.Less, this.term],
+    [TokenType.LessEqual, this.term],
+    [TokenType.Minus, this.factor],
+    [TokenType.Plus, this.factor],
+    [TokenType.Slash, this.unary],
+    [TokenType.Star, this.unary],
+  ]);
 
   private current = 0;
 
@@ -377,15 +377,9 @@ export default class Parser {
   }
 
   private handleMalformedBinaryExpression(): boolean {
-    // eslint-disable-next-line prefer-spread
-    if (
-      this.match.apply(this, Object.keys(this.discardFunctions) as TokenType[])
-    ) {
+    if (this.match.call(this, ...this.discardFunctions.keys())) {
       const operator = this.previous();
-      this
-        .discardFunctions[
-          operator.type as keyof typeof Parser.prototype.discardFunctions
-        ].call(this);
+      this.discardFunctions.get(operator.type)!.call(this);
       this.error(operator, `Expect let hand operand for ${operator.lexeme}`);
       return true;
     }
