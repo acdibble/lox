@@ -22,6 +22,11 @@ const astDefinitions = {
     Comma: {
       exprs: "Expr[]",
     },
+    Function: {
+      name: "Token | null",
+      params: "Token[]",
+      body: "Stmt[]",
+    },
     Grouping: {
       expression: "Expr",
     },
@@ -45,7 +50,7 @@ const astDefinitions = {
     Variable: {
       name: "Token",
     },
-    imports: ["Token"],
+    imports: ["Token", "Stmt"].sort(),
   },
   Stmt: {
     Block: {
@@ -80,7 +85,7 @@ const astDefinitions = {
       condition: "Expr",
       body: "Stmt",
     },
-    imports: ["Expr", "Token"],
+    imports: ["Expr", "Token"].sort(),
   },
 } as const;
 
@@ -91,7 +96,7 @@ const defineAst = async (
   const { imports, ...classes } = astDefinitions[baseName];
   await write("// deno-lint-ignore-file no-namespace");
   for (const im of imports) {
-    await write(`import ${im} from "./${im}.ts";`);
+    await write(`import type ${im} from "./${im}.ts";`);
   }
   await write(`\nabstract class ${baseName} {
   abstract accept<T>(visitor: ${baseName}.Visitor<T>): T;

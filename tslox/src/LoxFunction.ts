@@ -1,4 +1,5 @@
 import Environment from "./Environment.ts";
+import Expr from "./Expr.ts";
 import Interpreter from "./Interpreter.ts";
 import LoxCallable from "./LoxCallable.ts";
 import Stmt from "./Stmt.ts";
@@ -6,7 +7,7 @@ import Return from "./Return.ts";
 
 export default class LoxFunction extends LoxCallable {
   constructor(
-    private readonly declaration: Stmt.Function,
+    private readonly declaration: Stmt.Function | Expr.Function,
     private readonly closure: Environment,
   ) {
     super();
@@ -31,6 +32,12 @@ export default class LoxFunction extends LoxCallable {
   }
 
   toString(): string {
-    return `<fn ${this.declaration.name.lexeme}>`;
+    let name: string;
+    if (this.declaration instanceof Expr.Function) {
+      name = this.declaration.name?.lexeme ?? "(anonymous)";
+    } else {
+      name = this.declaration.name.lexeme;
+    }
+    return `<fn ${name}>`;
   }
 }

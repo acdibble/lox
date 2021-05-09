@@ -174,6 +174,14 @@ export default class Parser {
     let initializer = null;
     if (this.match(TokenType.Equal)) initializer = this.expression();
 
+    if (initializer instanceof Expr.Function) {
+      initializer = new Expr.Function(
+        name,
+        initializer.params,
+        initializer.body,
+      );
+    }
+
     this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
     return new Stmt.Var(name, initializer);
   }
@@ -184,8 +192,17 @@ export default class Parser {
     return new Stmt.Expression(expr);
   }
 
-  private function(kind: string): Stmt.Function {
-    const name = this.consume(TokenType.Identifier, `Expect ${kind} name.`);
+  private function(kind: "function"): Stmt.Function;
+  private function(kind: "expression"): Expr.Function;
+  private function(
+    kind: "function" | "expression",
+  ): Stmt.Function | Expr.Function {
+    let name: Token | null = null;
+    if (kind === "function") {
+      name = this.consume(TokenType.Identifier, `Expect ${kind} name.`);
+    } else if (this.match(TokenType.Identifier)) {
+      name = this.previous();
+    }
     this.consume(TokenType.LeftParen, `Expect '(' after ${kind} name.`);
     const parameters: Token[] = [];
     if (!this.check(TokenType.RightParen)) {
@@ -203,7 +220,11 @@ export default class Parser {
 
     this.consume(TokenType.LeftBrace, `Expect '{' before ${kind} body.`);
     const body = this.block();
-    return new Stmt.Function(name, parameters, body);
+
+    if (kind === "function") {
+      return new Stmt.Function(name!, parameters, body);
+    }
+    return new Expr.Function(name, parameters, body);
   }
 
   private block(): Stmt[] {
@@ -390,6 +411,10 @@ export default class Parser {
       this.consume(TokenType.RightParen, "Expect ')' after expression.");
       if (exprs.length === 1) return new Expr.Grouping(exprs[0]);
       return new Expr.Comma(exprs);
+    }
+
+    if (this.match(TokenType.Fun)) {
+      return this.function("expression");
     }
 
     if (this.handleMalformedBinaryExpression()) {

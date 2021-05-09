@@ -125,6 +125,10 @@ export default class Interpreter
     return expr.exprs.reduce((_acc, subexpr) => this.evaluate(subexpr), null);
   }
 
+  visitFunctionExpr(expr: Expr.Function): any {
+    return new LoxFunction(expr, this.environment);
+  }
+
   visitGroupingExpr(expr: Expr.Grouping): any {
     return this.evaluate(expr.expression);
   }

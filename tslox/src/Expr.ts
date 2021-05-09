@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-namespace
-import Token from "./Token.ts";
+import type Stmt from "./Stmt.ts";
+import type Token from "./Token.ts";
 
 abstract class Expr {
   abstract accept<T>(visitor: Expr.Visitor<T>): T;
@@ -11,6 +12,7 @@ namespace Expr {
     visitBinaryExpr(expr: Binary): T;
     visitCallExpr(expr: Call): T;
     visitCommaExpr(expr: Comma): T;
+    visitFunctionExpr(expr: Function): T;
     visitGroupingExpr(expr: Grouping): T;
     visitLiteralExpr(expr: Literal): T;
     visitLogicalExpr(expr: Logical): T;
@@ -69,6 +71,20 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitCommaExpr(this);
+    }
+  }
+
+  export class Function extends Expr {
+    constructor(
+      readonly name: Token | null,
+      readonly params: Token[],
+      readonly body: Stmt[],
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitFunctionExpr(this);
     }
   }
 
