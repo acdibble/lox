@@ -1,6 +1,7 @@
 import Expr from "./Expr.ts";
 import Interpreter from "./Interpreter.ts";
 import Parser from "./Parser.ts";
+import Resolver from "./Resolver.ts";
 import type RuntimeError from "./RuntimeError.ts";
 import Scanner from "./Scanner.ts";
 import Stmt from "./Stmt.ts";
@@ -51,6 +52,12 @@ const run = (text: string, mode = Mode.File): void => {
   const parser = new Parser(tokens, error);
   const statements = parser.parse();
   if (hadError || !statements.length) return;
+
+  const resolver = new Resolver(interpreter, error);
+  resolver.resolve(statements);
+
+  if (hadError) return;
+
   let finalStmt: Stmt.Expression | null = null;
   if (
     mode === Mode.REPL &&

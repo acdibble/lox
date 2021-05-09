@@ -15,6 +15,7 @@ export default class Interpreter
   implements Expr.Visitor<any>, Stmt.Visitor<void> {
   readonly globals = new Environment();
   private environment = this.globals;
+  private readonly locals = new Map<Expr, number>();
 
   constructor(
     private readonly loxRuntimeError: LoxRuntimeError,
@@ -52,7 +53,14 @@ export default class Interpreter
 
   visitAssignExpr(expr: Expr.Assign): any {
     const value = this.evaluate(expr.value);
-    this.environment.assign(expr.name, value);
+
+    const distance = this.locals.get(expr);
+    if (distance !== undefined) {
+      this.environment.assignAt(distance, expr.name, value);
+    } else {
+      this.globals.assign(expr.name, value);
+    }
+
     return value;
   }
 
@@ -122,7 +130,7 @@ export default class Interpreter
   }
 
   visitCommaExpr(expr: Expr.Comma): any {
-    return expr.exprs.reduce((_acc, subexpr) => this.evaluate(subexpr), null);
+    return expr.expressions.reduce((_acc, ex) => this.evaluate(ex), null);
   }
 
   visitFunctionExpr(expr: Expr.Function): any {
@@ -174,7 +182,16 @@ export default class Interpreter
   }
 
   visitVariableExpr(expr: Expr.Variable): any {
-    return this.environment.get(expr.name);
+    return this.lookUpVariable(expr.name, expr);
+  }
+
+  private lookUpVariable(name: Token, expr: Expr): any {
+    const distance = this.locals.get(expr);
+    if (distance !== undefined) {
+      return this.environment.getAt(distance, name.lexeme);
+    }
+
+    return this.globals.get(name);
   }
 
   private evaluate(expr: Expr): any {
@@ -183,6 +200,10 @@ export default class Interpreter
 
   private execute(stmt: Stmt): void {
     stmt.accept(this);
+  }
+
+  resolve(expr: Expr, depth: number): void {
+    this.locals.set(expr, depth);
   }
 
   executeBlock(statements: Stmt[], environment: Environment): void {

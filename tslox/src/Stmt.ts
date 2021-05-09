@@ -33,6 +33,7 @@ namespace Stmt {
 
   export class Break extends Stmt {
     constructor(
+      readonly keyword: Token,
     ) {
       super();
     }

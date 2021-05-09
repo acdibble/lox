@@ -20,7 +20,7 @@ const astDefinitions = {
       args: "Expr[]",
     },
     Comma: {
-      exprs: "Expr[]",
+      expressions: "Expr[]",
     },
     Function: {
       name: "Token | null",
@@ -56,7 +56,9 @@ const astDefinitions = {
     Block: {
       statements: "Stmt[]",
     },
-    Break: {},
+    Break: {
+      keyword: "Token",
+    },
     Expression: {
       expression: "Expr",
     },

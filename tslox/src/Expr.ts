@@ -64,7 +64,7 @@ namespace Expr {
 
   export class Comma extends Expr {
     constructor(
-      readonly exprs: Expr[],
+      readonly expressions: Expr[],
     ) {
       super();
     }

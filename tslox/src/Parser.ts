@@ -30,8 +30,6 @@ export default class Parser {
 
   private current = 0;
 
-  private inLoop = false;
-
   constructor(
     private readonly tokens: readonly Token[],
     private readonly loxError: LoxError,
@@ -77,15 +75,12 @@ export default class Parser {
   }
 
   private breakStatement(): Stmt {
-    if (!this.inLoop) {
-      this.loxError(this.previous(), "Must be inside a loop to use 'break'.");
-    }
+    const token = this.previous();
     this.consume(TokenType.Semicolon, "Expect ';' after break statement.");
-    return new Stmt.Break();
+    return new Stmt.Break(token);
   }
 
   private forStatement(): Stmt {
-    this.inLoop = true;
     try {
       this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
       let initializer: Stmt | null;
@@ -123,7 +118,6 @@ export default class Parser {
 
       return body;
     } finally {
-      this.inLoop = false;
     }
   }
 
@@ -155,7 +149,6 @@ export default class Parser {
   }
 
   private whileStatement(): Stmt {
-    this.inLoop = true;
     try {
       this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
       const condition = this.expression();
@@ -164,7 +157,6 @@ export default class Parser {
 
       return new Stmt.While(condition, body);
     } finally {
-      this.inLoop = false;
     }
   }
 
