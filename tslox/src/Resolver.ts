@@ -45,6 +45,9 @@ const enum LoopType {
 export default class Resolver
   implements Expr.Visitor<void>, Stmt.Visitor<void> {
   private readonly scopes: Stack<Map<string, boolean>> = new Stack();
+  private readonly references: Stack<
+    Map<string, { token: Token; used: boolean }>
+  > = new Stack();
   private currentFunction = FunctionType.None;
   private currentLoop = LoopType.None;
 
@@ -81,10 +84,16 @@ export default class Resolver
 
   private beginScope(): void {
     this.scopes.push(new Map());
+    this.references.push(new Map());
   }
 
   private endScope(): void {
     this.scopes.pop();
+    for (const { token, used } of this.references.pop()!.values()) {
+      if (!used) {
+        this.loxError(token, "Unused local variable.");
+      }
+    }
   }
 
   /** @private */
@@ -96,6 +105,7 @@ export default class Resolver
       this.loxError(name, "Already variable with this name in this scope.");
     }
     scope.set(name.lexeme, false);
+    this.references.peek()!.set(name.lexeme, { token: name, used: false });
   }
 
   private define(name: Token): void {
@@ -107,6 +117,9 @@ export default class Resolver
     for (let i = this.scopes.size - 1; i >= 0; i--) {
       if (this.scopes.get(i)!.has(name.lexeme)) {
         this.interpreter.resolve(expr, this.scopes.size - 1 - i);
+        const references = this.references.get(i)!;
+        const { used, token } = references.get(name.lexeme)!;
+        if (!used) references.set(name.lexeme, { used: true, token });
         return;
       }
     }
