@@ -248,6 +248,8 @@ export default class Parser {
       if (expr instanceof Expr.Variable) {
         const { name } = expr;
         return new Expr.Assign(name, value);
+      } else if (expr instanceof Expr.Get) {
+        return new Expr.Set(expr.object, expr.name, value);
       }
 
       this.loxError(equals, "Invalid assignment target");

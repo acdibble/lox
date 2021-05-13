@@ -1,3 +1,4 @@
 class Bagel {}
 var bagel = Bagel();
-print bagel;
+bagel.topping = "Cream cheese";
+print bagel.topping;

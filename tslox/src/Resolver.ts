@@ -237,6 +237,11 @@ export default class Resolver
     this._resolve(expr.exprIfFalse);
   }
 
+  visitSetExpr(expr: Expr.Set): void {
+    this._resolve(expr.value);
+    this._resolve(expr.object);
+  }
+
   visitUnaryExpr(expr: Expr.Unary): void {
     this._resolve(expr.right);
   }

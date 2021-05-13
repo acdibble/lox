@@ -17,6 +17,7 @@ namespace Expr {
     visitGroupingExpr(expr: Expr.Grouping): T;
     visitLiteralExpr(expr: Expr.Literal): T;
     visitLogicalExpr(expr: Expr.Logical): T;
+    visitSetExpr(expr: Expr.Set): T;
     visitTernaryExpr(expr: Expr.Ternary): T;
     visitUnaryExpr(expr: Expr.Unary): T;
     visitVariableExpr(expr: Expr.Variable): T;
@@ -137,6 +138,20 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitLogicalExpr(this);
+    }
+  }
+
+  export class Set extends Expr {
+    constructor(
+      readonly object: Expr,
+      readonly name: Token,
+      readonly value: Expr,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitSetExpr(this);
     }
   }
 

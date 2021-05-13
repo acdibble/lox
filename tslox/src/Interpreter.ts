@@ -179,6 +179,18 @@ export default class Interpreter
     return this.evaluate(expr.exprIfFalse);
   }
 
+  visitSetExpr(expr: Expr.Set): any {
+    const object = this.evaluate(expr.object);
+
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name, "Only instances have fields.");
+    }
+
+    const value = this.evaluate(expr.value);
+    object.set(expr.name, value);
+    return value;
+  }
+
   visitUnaryExpr(expr: Expr.Unary): any {
     const right = this.evaluate(expr.right);
 

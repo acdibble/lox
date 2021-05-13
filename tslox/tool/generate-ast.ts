@@ -42,6 +42,11 @@ const astDefinitions = {
       operator: "Token",
       right: "Expr",
     },
+    Set: {
+      object: "Expr",
+      name: "Token",
+      value: "Expr",
+    },
     Ternary: {
       condition: "Expr",
       exprIfTrue: "Expr",
