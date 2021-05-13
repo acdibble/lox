@@ -13,6 +13,7 @@ namespace Expr {
     visitCallExpr(expr: Expr.Call): T;
     visitCommaExpr(expr: Expr.Comma): T;
     visitFunctionExpr(expr: Expr.Function): T;
+    visitGetExpr(expr: Expr.Get): T;
     visitGroupingExpr(expr: Expr.Grouping): T;
     visitLiteralExpr(expr: Expr.Literal): T;
     visitLogicalExpr(expr: Expr.Logical): T;
@@ -85,6 +86,19 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitFunctionExpr(this);
+    }
+  }
+
+  export class Get extends Expr {
+    constructor(
+      readonly object: Expr,
+      readonly name: Token,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitGetExpr(this);
     }
   }
 

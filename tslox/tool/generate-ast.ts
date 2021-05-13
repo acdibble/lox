@@ -27,6 +27,10 @@ const astDefinitions = {
       params: "Token[]",
       body: "Stmt[]",
     },
+    Get: {
+      object: "Expr",
+      name: "Token",
+    },
     Grouping: {
       expression: "Expr",
     },

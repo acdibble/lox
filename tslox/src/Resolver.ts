@@ -215,6 +215,10 @@ export default class Resolver
     this.resolveFunction(expr, FunctionType.Function);
   }
 
+  visitGetExpr(expr: Expr.Get): void {
+    this._resolve(expr.object);
+  }
+
   visitGroupingExpr(expr: Expr.Grouping): void {
     this._resolve(expr.expression);
   }

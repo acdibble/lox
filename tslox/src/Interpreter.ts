@@ -3,6 +3,7 @@ import Expr from "./Expr.ts";
 import LoxCallable from "./LoxCallable.ts";
 import LoxClass from "./LoxClass.ts";
 import LoxFunction from "./LoxFunction.ts";
+import LoxInstance from "./LoxInstance.ts";
 import { LoxRuntimeError } from "./main.ts";
 import RuntimeError from "./RuntimeError.ts";
 import Stmt from "./Stmt.ts";
@@ -137,6 +138,15 @@ export default class Interpreter
 
   visitFunctionExpr(expr: Expr.Function): any {
     return new LoxFunction(expr, this.environment);
+  }
+
+  visitGetExpr(expr: Expr.Get): any {
+    const object = this.evaluate(expr.object);
+    if (object instanceof LoxInstance) {
+      return object.get(expr.name);
+    }
+
+    throw new RuntimeError(expr.name, "Only instances have properties.");
   }
 
   visitGroupingExpr(expr: Expr.Grouping): any {

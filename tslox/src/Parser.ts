@@ -384,6 +384,12 @@ export default class Parser {
     while (true) {
       if (this.match(TokenType.LeftParen)) {
         expr = this.finishCall(expr);
+      } else if (this.match(TokenType.Dot)) {
+        const name = this.consume(
+          TokenType.Identifier,
+          "Expect property name after '.'.",
+        );
+        expr = new Expr.Get(expr, name);
       } else {
         break;
       }
