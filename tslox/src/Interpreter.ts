@@ -137,7 +137,7 @@ export default class Interpreter
   }
 
   visitFunctionExpr(expr: Expr.Function): any {
-    return new LoxFunction(expr, this.environment);
+    return new LoxFunction(expr, this.environment, false);
   }
 
   visitGetExpr(expr: Expr.Get): any {
@@ -260,7 +260,11 @@ export default class Interpreter
 
     const methods: Record<string, LoxFunction> = {};
     for (const method of stmt.methods) {
-      const fn = new LoxFunction(method, this.environment);
+      const fn = new LoxFunction(
+        method,
+        this.environment,
+        method.name.lexeme === "init",
+      );
       methods[method.name.lexeme] = fn;
     }
 
@@ -273,7 +277,7 @@ export default class Interpreter
   }
 
   visitFunctionStmt(stmt: Stmt.Function): void {
-    const fn = new LoxFunction(stmt, this.environment);
+    const fn = new LoxFunction(stmt, this.environment, false);
     this.environment.define(stmt.name.lexeme, fn);
   }
 

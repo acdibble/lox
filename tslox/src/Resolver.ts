@@ -41,6 +41,7 @@ const enum ClassType {
 const enum FunctionType {
   None,
   Function,
+  Initializer,
   Method,
 }
 
@@ -157,7 +158,9 @@ export default class Resolver
     });
 
     for (const method of stmt.methods) {
-      const declaration = FunctionType.Method;
+      const declaration = method.name.lexeme === "init"
+        ? FunctionType.Initializer
+        : FunctionType.Method;
       this.resolveFunction(method, declaration);
     }
 
@@ -190,7 +193,15 @@ export default class Resolver
     if (this.currentFunction === FunctionType.None) {
       this.loxError(stmt.keyword, "Can't return from top-level code.");
     }
-    if (stmt.value) this._resolve(stmt.value);
+    if (stmt.value) {
+      if (this.currentFunction === FunctionType.Initializer) {
+        this.loxError(
+          stmt.keyword,
+          "Can't return a value from an initializer.",
+        );
+      }
+      this._resolve(stmt.value);
+    }
   }
 
   visitVarStmt(stmt: Stmt.Var): void {

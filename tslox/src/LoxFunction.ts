@@ -10,6 +10,7 @@ export default class LoxFunction extends LoxCallable {
   constructor(
     private readonly declaration: Stmt.Function | Expr.Function,
     private readonly closure: Environment,
+    private readonly isInitializer: boolean,
   ) {
     super();
   }
@@ -17,7 +18,7 @@ export default class LoxFunction extends LoxCallable {
   bind(instance: LoxInstance): LoxFunction {
     const environment = new Environment(this.closure);
     environment.define("this", instance);
-    return new LoxFunction(this.declaration, environment);
+    return new LoxFunction(this.declaration, environment, this.isInitializer);
   }
 
   call(interpreter: Interpreter, args: any[]): any {
@@ -28,9 +29,13 @@ export default class LoxFunction extends LoxCallable {
     try {
       interpreter.executeBlock(this.declaration.body, environment);
     } catch (returnValue) {
-      if (returnValue instanceof Return) return returnValue.value;
+      if (returnValue instanceof Return) {
+        if (this.isInitializer) return this.closure.getAt(0, "this");
+        return returnValue.value;
+      }
       throw returnValue;
     }
+    if (this.isInitializer) return this.closure.getAt(0, "this");
     return null;
   }
 

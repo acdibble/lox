@@ -1,6 +1,10 @@
 class Egotist {
+  init() {
+    this.saying = "Ego sum";
+  }
+
   speak() {
-    print this;
+    print this.saying;
   }
 }
 
