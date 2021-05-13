@@ -33,6 +33,11 @@ class Stack<T> {
   }
 }
 
+const enum ClassType {
+  None,
+  Class,
+}
+
 const enum FunctionType {
   None,
   Function,
@@ -57,6 +62,7 @@ export default class Resolver
   > = new Stack();
   private currentFunction = FunctionType.None;
   private currentLoop = LoopType.None;
+  private currentClass = ClassType.None;
 
   constructor(
     private readonly interpreter: Interpreter,
@@ -141,13 +147,22 @@ export default class Resolver
   }
 
   visitClassStmt(stmt: Stmt.Class): void {
+    const enclosingClass = this.currentClass;
+    this.currentClass = ClassType.Class;
     this.declare(stmt.name);
+
+    this.beginScope();
+    this.scopes.peek((scope) => {
+      scope.set("this", { token: null as any, state: VariableState.Read });
+    });
 
     for (const method of stmt.methods) {
       const declaration = FunctionType.Method;
       this.resolveFunction(method, declaration);
     }
 
+    this.endScope();
+    this.currentClass = enclosingClass;
     this.define(stmt.name);
   }
 
@@ -247,6 +262,14 @@ export default class Resolver
   visitSetExpr(expr: Expr.Set): void {
     this._resolve(expr.value);
     this._resolve(expr.object);
+  }
+
+  visitThisExpr(expr: Expr.This): void {
+    if (this.currentClass === ClassType.None) {
+      this.loxError(expr.keyword, "Can't use 'this' outside of a class.");
+      return;
+    }
+    this.resolveLocal(expr, expr.keyword);
   }
 
   visitUnaryExpr(expr: Expr.Unary): void {

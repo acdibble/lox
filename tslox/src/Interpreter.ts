@@ -191,6 +191,10 @@ export default class Interpreter
     return value;
   }
 
+  visitThisExpr(expr: Expr.This): any {
+    return this.lookUpVariable(expr.keyword, expr);
+  }
+
   visitUnaryExpr(expr: Expr.Unary): any {
     const right = this.evaluate(expr.right);
 

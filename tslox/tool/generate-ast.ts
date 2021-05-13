@@ -47,6 +47,9 @@ const astDefinitions = {
       name: "Token",
       value: "Expr",
     },
+    This: {
+      keyword: "Token",
+    },
     Ternary: {
       condition: "Expr",
       exprIfTrue: "Expr",

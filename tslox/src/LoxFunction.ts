@@ -2,6 +2,7 @@ import Environment from "./Environment.ts";
 import Expr from "./Expr.ts";
 import Interpreter from "./Interpreter.ts";
 import LoxCallable from "./LoxCallable.ts";
+import type LoxInstance from "./LoxInstance.ts";
 import Stmt from "./Stmt.ts";
 import Return from "./Return.ts";
 
@@ -11,6 +12,12 @@ export default class LoxFunction extends LoxCallable {
     private readonly closure: Environment,
   ) {
     super();
+  }
+
+  bind(instance: LoxInstance): LoxFunction {
+    const environment = new Environment(this.closure);
+    environment.define("this", instance);
+    return new LoxFunction(this.declaration, environment);
   }
 
   call(interpreter: Interpreter, args: any[]): any {
