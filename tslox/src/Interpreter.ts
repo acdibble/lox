@@ -46,6 +46,7 @@ export default class Interpreter
     } catch (error) {
       if (error instanceof RuntimeError) {
         this.loxRuntimeError(error);
+        return;
       }
       throw error;
     }

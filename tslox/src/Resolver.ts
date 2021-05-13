@@ -1,4 +1,4 @@
-import type Expr from "./Expr.ts";
+import Expr from "./Expr.ts";
 import type Interpreter from "./Interpreter.ts";
 import type { LoxError } from "./main.ts";
 import type Stmt from "./Stmt.ts";
@@ -7,7 +7,7 @@ import type Token from "./Token.ts";
 class Stack<T> {
   private readonly storage: T[] = [];
 
-  get(index: number): T | null {
+  get(index: number): T | undefined {
     return this.storage[index];
   }
 
@@ -19,12 +19,13 @@ class Stack<T> {
     this.storage.push(value);
   }
 
-  pop(): T | null {
-    return this.storage.pop() ?? null;
+  pop(): T | undefined {
+    return this.storage.pop();
   }
 
-  peek(): T | null {
-    return this.storage[this.storage.length - 1] ?? null;
+  peek(cb: (value: T) => void): void {
+    const value = this.storage[this.storage.length - 1];
+    if (value) cb(value);
   }
 
   get size() {
@@ -42,11 +43,16 @@ const enum LoopType {
   While,
 }
 
+const enum VariableState {
+  Declared,
+  Defined,
+  Read,
+}
+
 export default class Resolver
   implements Expr.Visitor<void>, Stmt.Visitor<void> {
-  private readonly scopes: Stack<Map<string, boolean>> = new Stack();
-  private readonly references: Stack<
-    Map<string, { token: Token; used: boolean }>
+  private readonly scopes: Stack<
+    Map<string, { token: Token; state: VariableState }>
   > = new Stack();
   private currentFunction = FunctionType.None;
   private currentLoop = LoopType.None;
@@ -84,13 +90,11 @@ export default class Resolver
 
   private beginScope(): void {
     this.scopes.push(new Map());
-    this.references.push(new Map());
   }
 
   private endScope(): void {
-    this.scopes.pop();
-    for (const { token, used } of this.references.pop()!.values()) {
-      if (!used) {
+    for (const { token, state } of this.scopes.pop()!.values()) {
+      if (state === VariableState.Defined) {
         this.loxError(token, "Unused local variable.");
       }
     }
@@ -98,28 +102,26 @@ export default class Resolver
 
   /** @private */
   declare(name: Token): void {
-    if (this.scopes.isEmpty()) return;
-
-    const scope = this.scopes.peek()!;
-    if (scope.has(name.lexeme)) {
-      this.loxError(name, "Already variable with this name in this scope.");
-    }
-    scope.set(name.lexeme, false);
-    this.references.peek()!.set(name.lexeme, { token: name, used: false });
+    this.scopes.peek((scope) => {
+      if (scope.has(name.lexeme)) {
+        this.loxError(name, "Already variable with this name in this scope.");
+      }
+      scope.set(name.lexeme, { token: name, state: VariableState.Declared });
+    });
   }
 
   private define(name: Token): void {
-    if (this.scopes.isEmpty()) return;
-    this.scopes.peek()!.set(name.lexeme, true);
+    this.scopes.peek((scope) => {
+      scope.get(name.lexeme)!.state = VariableState.Defined;
+    });
   }
 
   private resolveLocal(expr: Expr, name: Token): void {
     for (let i = this.scopes.size - 1; i >= 0; i--) {
-      if (this.scopes.get(i)!.has(name.lexeme)) {
+      const variable = this.scopes.get(i)!.get(name.lexeme);
+      if (variable) {
         this.interpreter.resolve(expr, this.scopes.size - 1 - i);
-        const references = this.references.get(i)!;
-        const { used, token } = references.get(name.lexeme)!;
-        if (!used) references.set(name.lexeme, { used: true, token });
+        if (!(expr instanceof Expr.Assign)) variable.state = VariableState.Read;
         return;
       }
     }
@@ -231,16 +233,15 @@ export default class Resolver
   }
 
   visitVariableExpr(expr: Expr.Variable): void {
-    if (
-      !this.scopes.isEmpty() &&
-      this.scopes.peek()!.get(expr.name.lexeme) === false
-    ) {
-      this.loxError(
-        expr.name,
-        "Can't read local variable in its own initializer.",
-      );
-    }
+    this.scopes.peek((scope) => {
+      if (scope.get(expr.name.lexeme)?.state === VariableState.Declared) {
+        this.loxError(
+          expr.name,
+          "Can't read local variable in its own initializer.",
+        );
+      }
 
-    this.resolveLocal(expr, expr.name);
+      this.resolveLocal(expr, expr.name);
+    });
   }
 }
