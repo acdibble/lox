@@ -36,6 +36,7 @@ class Stack<T> {
 const enum FunctionType {
   None,
   Function,
+  Method,
 }
 
 const enum LoopType {
@@ -141,6 +142,12 @@ export default class Resolver
 
   visitClassStmt(stmt: Stmt.Class): void {
     this.declare(stmt.name);
+
+    for (const method of stmt.methods) {
+      const declaration = FunctionType.Method;
+      this.resolveFunction(method, declaration);
+    }
+
     this.define(stmt.name);
   }
 
