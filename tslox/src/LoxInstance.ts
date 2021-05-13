@@ -6,7 +6,7 @@ export default class LoxInstance {
   private readonly fields: Record<string, any> = Object.create(null);
 
   constructor(
-    private klass: LoxClass,
+    protected readonly klass: LoxClass,
   ) {}
 
   get(name: Token): any {

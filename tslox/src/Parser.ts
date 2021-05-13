@@ -80,12 +80,14 @@ export default class Parser {
     this.consume(TokenType.LeftBrace, "Expect '{' before class body.");
 
     const methods: Stmt.Function[] = [];
+    const classMethods: Stmt.Function[] = [];
     while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
-      methods.push(this.function("method"));
+      (this.match(TokenType.Class) ? classMethods : methods)
+        .push(this.function("method"));
     }
 
     this.consume(TokenType.RightBrace, "Expect '}' after class body.");
-    return new Stmt.Class(name, methods);
+    return new Stmt.Class(name, methods, classMethods);
   }
 
   private varDeclaration(): Stmt {

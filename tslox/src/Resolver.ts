@@ -165,8 +165,18 @@ export default class Resolver
     }
 
     this.endScope();
-    this.currentClass = enclosingClass;
+
+    for (const method of stmt.classMethods) {
+      this.beginScope();
+      this.scopes.peek((scope) => {
+        scope.set("this", { token: stmt.name, state: VariableState.Read });
+      });
+      this.resolveFunction(method, FunctionType.Method);
+      this.endScope();
+    }
+
     this.define(stmt.name);
+    this.currentClass = enclosingClass;
   }
 
   visitExpressionStmt(stmt: Stmt.Expression): void {

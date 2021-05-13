@@ -36,6 +36,7 @@ namespace Stmt {
     constructor(
       readonly name: Token,
       readonly methods: Stmt.Function[],
+      readonly classMethods: Stmt.Function[],
     ) {
       super();
     }

@@ -3,12 +3,13 @@ import LoxCallable from "./LoxCallable.ts";
 import LoxFunction from "./LoxFunction.ts";
 import LoxInstance from "./LoxInstance.ts";
 
-export default class LoxClass extends LoxCallable {
+export default class LoxClass extends LoxInstance implements LoxCallable {
   constructor(
+    metaclass: LoxClass | null,
     readonly name: string,
     private readonly methods: Record<string, LoxFunction>,
   ) {
-    super();
+    super(metaclass as any);
   }
 
   findMethod(name: string): LoxFunction | undefined {

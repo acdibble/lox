@@ -6,14 +6,12 @@ import type LoxInstance from "./LoxInstance.ts";
 import Stmt from "./Stmt.ts";
 import Return from "./Return.ts";
 
-export default class LoxFunction extends LoxCallable {
+export default class LoxFunction implements LoxCallable {
   constructor(
     private readonly declaration: Stmt.Function | Expr.Function,
     private readonly closure: Environment,
     private readonly isInitializer: boolean,
-  ) {
-    super();
-  }
+  ) {}
 
   bind(instance: LoxInstance): LoxFunction {
     const environment = new Environment(this.closure);

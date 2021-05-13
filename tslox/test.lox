@@ -1,4 +1,9 @@
 class Egotist {
+  class test() {
+    print Egotist;
+    print "class method works";
+  }
+
   init() {
     this.saying = "Ego sum";
   }
@@ -10,3 +15,5 @@ class Egotist {
 
 var method = Egotist().speak;
 method();
+
+Egotist.test();

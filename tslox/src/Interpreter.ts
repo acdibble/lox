@@ -1,6 +1,6 @@
 import Environment from "./Environment.ts";
 import Expr from "./Expr.ts";
-import LoxCallable from "./LoxCallable.ts";
+import LoxCallable, { implementsLoxCallable } from "./LoxCallable.ts";
 import LoxClass from "./LoxClass.ts";
 import LoxFunction from "./LoxFunction.ts";
 import LoxInstance from "./LoxInstance.ts";
@@ -24,7 +24,7 @@ export default class Interpreter
   ) {
     this.globals.define(
       "clock",
-      new class extends LoxCallable {
+      new class implements LoxCallable {
         arity(): number {
           return 0;
         }
@@ -112,8 +112,7 @@ export default class Interpreter
 
   visitCallExpr(expr: Expr.Call): any {
     const fn: LoxCallable | unknown = this.evaluate(expr.callee);
-
-    if (!(fn instanceof LoxCallable)) {
+    if (!implementsLoxCallable(fn)) {
       throw new RuntimeError(
         expr.paren,
         "Can only call functions and classes.",
@@ -258,7 +257,19 @@ export default class Interpreter
   visitClassStmt(stmt: Stmt.Class): void {
     this.environment.define(stmt.name.lexeme, null);
 
-    const methods: Record<string, LoxFunction> = {};
+    const classMethods: Record<string, LoxFunction> = Object.create(null);
+    for (const method of stmt.classMethods) {
+      const fn = new LoxFunction(method, this.environment, false);
+      classMethods[method.name.lexeme] = fn;
+    }
+
+    const metaclass = new LoxClass(
+      null,
+      `${stmt.name.lexeme} metaclass`,
+      classMethods,
+    );
+
+    const methods: Record<string, LoxFunction> = Object.create(null);
     for (const method of stmt.methods) {
       const fn = new LoxFunction(
         method,
@@ -268,7 +279,7 @@ export default class Interpreter
       methods[method.name.lexeme] = fn;
     }
 
-    const klass = new LoxClass(stmt.name.lexeme, methods);
+    const klass = new LoxClass(metaclass, stmt.name.lexeme, methods);
     this.environment.assign(stmt.name, klass);
   }
 

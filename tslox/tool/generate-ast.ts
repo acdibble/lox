@@ -71,6 +71,7 @@ const astDefinitions = {
     Class: {
       name: "Token",
       methods: "Stmt.Function[]",
+      classMethods: "Stmt.Function[]",
     },
     Break: {
       keyword: "Token",
