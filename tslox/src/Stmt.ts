@@ -8,15 +8,16 @@ abstract class Stmt {
 
 namespace Stmt {
   export interface Visitor<T> {
-    visitBlockStmt(stmt: Block): T;
-    visitBreakStmt(stmt: Break): T;
-    visitExpressionStmt(stmt: Expression): T;
-    visitFunctionStmt(stmt: Function): T;
-    visitIfStmt(stmt: If): T;
-    visitPrintStmt(stmt: Print): T;
-    visitReturnStmt(stmt: Return): T;
-    visitVarStmt(stmt: Var): T;
-    visitWhileStmt(stmt: While): T;
+    visitBlockStmt(stmt: Stmt.Block): T;
+    visitClassStmt(stmt: Stmt.Class): T;
+    visitBreakStmt(stmt: Stmt.Break): T;
+    visitExpressionStmt(stmt: Stmt.Expression): T;
+    visitFunctionStmt(stmt: Stmt.Function): T;
+    visitIfStmt(stmt: Stmt.If): T;
+    visitPrintStmt(stmt: Stmt.Print): T;
+    visitReturnStmt(stmt: Stmt.Return): T;
+    visitVarStmt(stmt: Stmt.Var): T;
+    visitWhileStmt(stmt: Stmt.While): T;
   }
 
   export class Block extends Stmt {
@@ -28,6 +29,19 @@ namespace Stmt {
 
     accept<T>(visitor: Stmt.Visitor<T>): T {
       return visitor.visitBlockStmt(this);
+    }
+  }
+
+  export class Class extends Stmt {
+    constructor(
+      readonly name: Token,
+      readonly methods: Stmt.Function[],
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Stmt.Visitor<T>): T {
+      return visitor.visitClassStmt(this);
     }
   }
 

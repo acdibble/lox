@@ -56,6 +56,10 @@ const astDefinitions = {
     Block: {
       statements: "Stmt[]",
     },
+    Class: {
+      name: "Token",
+      methods: "Stmt.Function[]",
+    },
     Break: {
       keyword: "Token",
     },
@@ -109,7 +113,7 @@ const defineAst = async (
 
   for (const className of keys(classes)) {
     await write(
-      `    visit${className}${baseName}(${baseName.toLowerCase()}: ${className}): T;`,
+      `    visit${className}${baseName}(${baseName.toLowerCase()}: ${baseName}.${className}): T;`,
     );
   }
 

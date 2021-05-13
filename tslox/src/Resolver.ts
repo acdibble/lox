@@ -139,6 +139,11 @@ export default class Resolver
     }
   }
 
+  visitClassStmt(stmt: Stmt.Class): void {
+    this.declare(stmt.name);
+    this.define(stmt.name);
+  }
+
   visitExpressionStmt(stmt: Stmt.Expression): void {
     this._resolve(stmt.expression);
   }

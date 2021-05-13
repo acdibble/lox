@@ -1,6 +1,7 @@
 import Environment from "./Environment.ts";
 import Expr from "./Expr.ts";
 import LoxCallable from "./LoxCallable.ts";
+import LoxClass from "./LoxClass.ts";
 import LoxFunction from "./LoxFunction.ts";
 import { LoxRuntimeError } from "./main.ts";
 import RuntimeError from "./RuntimeError.ts";
@@ -226,6 +227,12 @@ export default class Interpreter
 
   visitBreakStmt(_stmt: Stmt.Break): void {
     throw new BreakError();
+  }
+
+  visitClassStmt(stmt: Stmt.Class): void {
+    this.environment.define(stmt.name.lexeme, null);
+    const klass = new LoxClass(stmt.name.lexeme);
+    this.environment.assign(stmt.name, klass);
   }
 
   visitExpressionStmt(stmt: Stmt.Expression): void {

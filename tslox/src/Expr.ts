@@ -8,17 +8,17 @@ abstract class Expr {
 
 namespace Expr {
   export interface Visitor<T> {
-    visitAssignExpr(expr: Assign): T;
-    visitBinaryExpr(expr: Binary): T;
-    visitCallExpr(expr: Call): T;
-    visitCommaExpr(expr: Comma): T;
-    visitFunctionExpr(expr: Function): T;
-    visitGroupingExpr(expr: Grouping): T;
-    visitLiteralExpr(expr: Literal): T;
-    visitLogicalExpr(expr: Logical): T;
-    visitTernaryExpr(expr: Ternary): T;
-    visitUnaryExpr(expr: Unary): T;
-    visitVariableExpr(expr: Variable): T;
+    visitAssignExpr(expr: Expr.Assign): T;
+    visitBinaryExpr(expr: Expr.Binary): T;
+    visitCallExpr(expr: Expr.Call): T;
+    visitCommaExpr(expr: Expr.Comma): T;
+    visitFunctionExpr(expr: Expr.Function): T;
+    visitGroupingExpr(expr: Expr.Grouping): T;
+    visitLiteralExpr(expr: Expr.Literal): T;
+    visitLogicalExpr(expr: Expr.Logical): T;
+    visitTernaryExpr(expr: Expr.Ternary): T;
+    visitUnaryExpr(expr: Expr.Unary): T;
+    visitVariableExpr(expr: Expr.Variable): T;
   }
 
   export class Assign extends Expr {

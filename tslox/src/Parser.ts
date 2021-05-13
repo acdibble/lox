@@ -50,6 +50,8 @@ export default class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match(TokenType.Class)) return this.classDeclaration();
+      if (this.match(TokenType.Fun)) return this.function("function");
       if (this.match(TokenType.Var)) return this.varDeclaration();
 
       return this.statement();
@@ -64,7 +66,6 @@ export default class Parser {
 
   private statement(): Stmt {
     if (this.match(TokenType.Break)) return this.breakStatement();
-    if (this.match(TokenType.Fun)) return this.function("function");
     if (this.match(TokenType.For)) return this.forStatement();
     if (this.match(TokenType.If)) return this.ifStatement();
     if (this.match(TokenType.Print)) return this.printStatement();
@@ -74,6 +75,37 @@ export default class Parser {
     return this.expressionStatement();
   }
 
+  private classDeclaration(): Stmt {
+    const name = this.consume(TokenType.Identifier, "Expect class name.");
+    this.consume(TokenType.LeftBrace, "Expect '{' before class body.");
+
+    const methods: Stmt.Function[] = [];
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      methods.push(this.function("method"));
+    }
+
+    this.consume(TokenType.RightBrace, "Expect '}' after class body.");
+    return new Stmt.Class(name, methods);
+  }
+
+  private varDeclaration(): Stmt {
+    const name = this.consume(TokenType.Identifier, "Expect variable name.");
+
+    let initializer = null;
+    if (this.match(TokenType.Equal)) initializer = this.expression();
+
+    if (initializer instanceof Expr.Function) {
+      initializer = new Expr.Function(
+        name,
+        initializer.params,
+        initializer.body,
+      );
+    }
+
+    this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
+    return new Stmt.Var(name, initializer);
+  }
+
   private breakStatement(): Stmt {
     const token = this.previous();
     this.consume(TokenType.Semicolon, "Expect ';' after break statement.");
@@ -81,44 +113,41 @@ export default class Parser {
   }
 
   private forStatement(): Stmt {
-    try {
-      this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
-      let initializer: Stmt | null;
-      if (this.match(TokenType.Semicolon)) {
-        initializer = null;
-      } else if (this.match(TokenType.Var)) {
-        initializer = this.varDeclaration();
-      } else {
-        initializer = this.expressionStatement();
-      }
-
-      let condition: Expr | null = null;
-      if (!this.check(TokenType.Semicolon)) {
-        condition = this.expression();
-      }
-      this.consume(TokenType.Semicolon, "Expect ';' after loop condition.");
-
-      let increment: Expr | null = null;
-      if (!this.check(TokenType.RightParen)) {
-        increment = this.expression();
-      }
-      this.consume(TokenType.RightParen, "Expect ')' after for clauses.");
-      let body = this.statement();
-
-      if (increment !== null) {
-        body = new Stmt.Block([body, new Stmt.Expression(increment)]);
-      }
-
-      if (condition === null) condition = new Expr.Literal(true);
-      body = new Stmt.While(condition, body);
-
-      if (initializer !== null) {
-        body = new Stmt.Block([initializer, body]);
-      }
-
-      return body;
-    } finally {
+    this.consume(TokenType.LeftParen, "Expect '(' after 'for'.");
+    let initializer: Stmt | null;
+    if (this.match(TokenType.Semicolon)) {
+      initializer = null;
+    } else if (this.match(TokenType.Var)) {
+      initializer = this.varDeclaration();
+    } else {
+      initializer = this.expressionStatement();
     }
+
+    let condition: Expr | null = null;
+    if (!this.check(TokenType.Semicolon)) {
+      condition = this.expression();
+    }
+    this.consume(TokenType.Semicolon, "Expect ';' after loop condition.");
+
+    let increment: Expr | null = null;
+    if (!this.check(TokenType.RightParen)) {
+      increment = this.expression();
+    }
+    this.consume(TokenType.RightParen, "Expect ')' after for clauses.");
+    let body = this.statement();
+
+    if (increment !== null) {
+      body = new Stmt.Block([body, new Stmt.Expression(increment)]);
+    }
+
+    if (condition === null) condition = new Expr.Literal(true);
+    body = new Stmt.While(condition, body);
+
+    if (initializer !== null) {
+      body = new Stmt.Block([initializer, body]);
+    }
+
+    return body;
   }
 
   private ifStatement(): Stmt {
@@ -149,33 +178,12 @@ export default class Parser {
   }
 
   private whileStatement(): Stmt {
-    try {
-      this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
-      const condition = this.expression();
-      this.consume(TokenType.RightParen, "Expect '(' after condition.");
-      const body = this.statement();
+    this.consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+    const condition = this.expression();
+    this.consume(TokenType.RightParen, "Expect '(' after condition.");
+    const body = this.statement();
 
-      return new Stmt.While(condition, body);
-    } finally {
-    }
-  }
-
-  private varDeclaration(): Stmt {
-    const name = this.consume(TokenType.Identifier, "Expect variable name.");
-
-    let initializer = null;
-    if (this.match(TokenType.Equal)) initializer = this.expression();
-
-    if (initializer instanceof Expr.Function) {
-      initializer = new Expr.Function(
-        name,
-        initializer.params,
-        initializer.body,
-      );
-    }
-
-    this.consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
-    return new Stmt.Var(name, initializer);
+    return new Stmt.While(condition, body);
   }
 
   private expressionStatement(): Stmt {
@@ -184,13 +192,13 @@ export default class Parser {
     return new Stmt.Expression(expr);
   }
 
-  private function(kind: "function"): Stmt.Function;
+  private function(kind: "function" | "method"): Stmt.Function;
   private function(kind: "expression"): Expr.Function;
   private function(
-    kind: "function" | "expression",
+    kind: "function" | "expression" | "method",
   ): Stmt.Function | Expr.Function {
     let name: Token | null = null;
-    if (kind === "function") {
+    if (kind === "function" || kind === "method") {
       name = this.consume(TokenType.Identifier, `Expect ${kind} name.`);
     } else if (this.match(TokenType.Identifier)) {
       name = this.previous();
