@@ -154,6 +154,14 @@ export default class Resolver
     this.currentClass = ClassType.Class;
     this.declare(stmt.name);
 
+    if (stmt.superclass?.name.lexeme === stmt.name.lexeme) {
+      this.loxError(stmt.superclass.name, "A class can't inherit from itself.");
+    }
+
+    if (stmt.superclass) {
+      this._resolve(stmt.superclass);
+    }
+
     this.beginScope();
     this.scopes.peek((scope) => {
       scope.set("this", { token: null as any, state: VariableState.Read });

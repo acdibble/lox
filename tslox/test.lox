@@ -1,25 +1,9 @@
-class Egotist {
-  class test() {
-    print Egotist;
-    print "class method works";
-  }
-
-  name {
-    return this.toString();
-  }
-
-  init() {
-    this.saying = "Ego sum";
-  }
-
-  speak() {
-    print this.saying;
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
   }
 }
 
-var instance = Egotist();
-var method = instance.speak;
-method();
+class BostonCream < Doughnut {}
 
-print instance.name;
-Egotist.test();
+BostonCream().cook();

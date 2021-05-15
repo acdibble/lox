@@ -6,6 +6,7 @@ import LoxInstance from "./LoxInstance.ts";
 export default class LoxClass extends LoxInstance implements LoxCallable {
   constructor(
     metaclass: LoxClass | null,
+    private readonly superclass: LoxClass | null,
     readonly name: string,
     private readonly methods: Record<string, LoxFunction>,
   ) {
@@ -13,7 +14,7 @@ export default class LoxClass extends LoxInstance implements LoxCallable {
   }
 
   findMethod(name: string): LoxFunction | undefined {
-    return this.methods[name];
+    return this.methods[name] ?? this.superclass?.findMethod(name);
   }
 
   arity(): number {

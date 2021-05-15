@@ -70,6 +70,7 @@ const astDefinitions = {
     },
     Class: {
       name: "Token",
+      superclass: "Expr.Variable | null",
       methods: "Stmt.Function[]",
       classMethods: "Stmt.Function[]",
     },
