@@ -142,7 +142,11 @@ export default class Interpreter
   visitGetExpr(expr: Expr.Get): any {
     const object = this.evaluate(expr.object);
     if (object instanceof LoxInstance) {
-      return object.get(expr.name);
+      const field = object.get(expr.name);
+      if (field instanceof LoxFunction && field.isGetter()) {
+        return field.call(this, null);
+      }
+      return field;
     }
 
     throw new RuntimeError(expr.name, "Only instances have properties.");

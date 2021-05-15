@@ -3,25 +3,28 @@ import Token from "./Token.ts";
 import TokenType from "./TokenType.ts";
 
 export default class Scanner {
-  static keywords: Record<string, TokenType> = {
-    and: TokenType.And,
-    break: TokenType.Break,
-    class: TokenType.Class,
-    else: TokenType.Else,
-    false: TokenType.False,
-    for: TokenType.For,
-    fun: TokenType.Fun,
-    if: TokenType.If,
-    nil: TokenType.Nil,
-    or: TokenType.Or,
-    print: TokenType.Print,
-    return: TokenType.Return,
-    super: TokenType.Super,
-    this: TokenType.This,
-    true: TokenType.True,
-    var: TokenType.Var,
-    while: TokenType.While,
-  };
+  static keywords: Record<string, TokenType> = Object.assign(
+    Object.create(null),
+    {
+      and: TokenType.And,
+      break: TokenType.Break,
+      class: TokenType.Class,
+      else: TokenType.Else,
+      false: TokenType.False,
+      for: TokenType.For,
+      fun: TokenType.Fun,
+      if: TokenType.If,
+      nil: TokenType.Nil,
+      or: TokenType.Or,
+      print: TokenType.Print,
+      return: TokenType.Return,
+      super: TokenType.Super,
+      this: TokenType.This,
+      true: TokenType.True,
+      var: TokenType.Var,
+      while: TokenType.While,
+    },
+  );
 
   private static isDigit(char: string): boolean {
     return char >= "0" && char <= "9";

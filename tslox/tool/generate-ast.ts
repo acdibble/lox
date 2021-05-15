@@ -81,7 +81,7 @@ const astDefinitions = {
     },
     Function: {
       name: "Token",
-      params: "Token[]",
+      params: "Token[] | null",
       body: "Stmt[]",
     },
     If: {

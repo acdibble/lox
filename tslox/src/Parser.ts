@@ -205,20 +205,24 @@ export default class Parser {
     } else if (this.match(TokenType.Identifier)) {
       name = this.previous();
     }
-    this.consume(TokenType.LeftParen, `Expect '(' after ${kind} name.`);
-    const parameters: Token[] = [];
-    if (!this.check(TokenType.RightParen)) {
-      do {
-        if (parameters.length >= 255) {
-          this.error(this.peek(), "Can't have more than 255 parameters.");
-        }
+    let parameters: Token[] | null = null;
 
-        parameters.push(
-          this.consume(TokenType.Identifier, "Expect parameter name."),
-        );
-      } while (this.match(TokenType.Comma));
+    if (kind !== "method" || this.check(TokenType.LeftParen)) {
+      this.consume(TokenType.LeftParen, `Expect '(' after ${kind} name.`);
+      parameters = [];
+      if (!this.check(TokenType.RightParen)) {
+        do {
+          if (parameters.length >= 255) {
+            this.error(this.peek(), "Can't have more than 255 parameters.");
+          }
+
+          parameters.push(
+            this.consume(TokenType.Identifier, "Expect parameter name."),
+          );
+        } while (this.match(TokenType.Comma));
+      }
+      this.consume(TokenType.RightParen, "Expect ')' after parameters.");
     }
-    this.consume(TokenType.RightParen, "Expect ')' after parameters.");
 
     this.consume(TokenType.LeftBrace, `Expect '{' before ${kind} body.`);
     const body = this.block();
@@ -226,7 +230,7 @@ export default class Parser {
     if (kind === "function") {
       return new Stmt.Function(name!, parameters, body);
     }
-    return new Expr.Function(name, parameters, body);
+    return new Expr.Function(name, parameters!, body);
   }
 
   private block(): Stmt[] {

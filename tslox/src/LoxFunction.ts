@@ -19,10 +19,12 @@ export default class LoxFunction implements LoxCallable {
     return new LoxFunction(this.declaration, environment, this.isInitializer);
   }
 
-  call(interpreter: Interpreter, args: any[]): any {
+  call(interpreter: Interpreter, args: any[] | null): any {
     const environment = new Environment(this.closure);
-    for (let i = 0; i < args.length; i++) {
-      environment.define(this.declaration.params[i].lexeme, args[i]);
+    if (this.declaration.params) {
+      for (let i = 0; i < args!.length; i++) {
+        environment.define(this.declaration.params[i].lexeme, args![i]);
+      }
     }
     try {
       interpreter.executeBlock(this.declaration.body, environment);
@@ -38,7 +40,7 @@ export default class LoxFunction implements LoxCallable {
   }
 
   arity(): number {
-    return this.declaration.params.length;
+    return this.declaration.params?.length ?? 0;
   }
 
   toString(): string {
@@ -49,5 +51,9 @@ export default class LoxFunction implements LoxCallable {
       name = this.declaration.name.lexeme;
     }
     return `<fn ${name}>`;
+  }
+
+  isGetter(): boolean {
+    return this.declaration.params === null;
   }
 }

@@ -73,7 +73,7 @@ namespace Stmt {
   export class Function extends Stmt {
     constructor(
       readonly name: Token,
-      readonly params: Token[],
+      readonly params: Token[] | null,
       readonly body: Stmt[],
     ) {
       super();

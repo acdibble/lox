@@ -87,9 +87,11 @@ export default class Resolver
     const enclosingFunction = this.currentFunction;
     this.currentFunction = type;
     this.beginScope();
-    for (const param of fn.params) {
-      this.declare(param);
-      this.define(param);
+    if (fn.params) {
+      for (const param of fn.params) {
+        this.declare(param);
+        this.define(param);
+      }
     }
     this.resolve(fn.body);
     this.endScope();
