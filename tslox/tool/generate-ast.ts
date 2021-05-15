@@ -47,6 +47,10 @@ const astDefinitions = {
       name: "Token",
       value: "Expr",
     },
+    Super: {
+      keyword: "Token",
+      method: "Token",
+    },
     This: {
       keyword: "Token",
     },

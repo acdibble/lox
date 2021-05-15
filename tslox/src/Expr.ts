@@ -18,6 +18,7 @@ namespace Expr {
     visitLiteralExpr(expr: Expr.Literal): T;
     visitLogicalExpr(expr: Expr.Logical): T;
     visitSetExpr(expr: Expr.Set): T;
+    visitSuperExpr(expr: Expr.Super): T;
     visitThisExpr(expr: Expr.This): T;
     visitTernaryExpr(expr: Expr.Ternary): T;
     visitUnaryExpr(expr: Expr.Unary): T;
@@ -153,6 +154,19 @@ namespace Expr {
 
     accept<T>(visitor: Expr.Visitor<T>): T {
       return visitor.visitSetExpr(this);
+    }
+  }
+
+  export class Super extends Expr {
+    constructor(
+      readonly keyword: Token,
+      readonly method: Token,
+    ) {
+      super();
+    }
+
+    accept<T>(visitor: Expr.Visitor<T>): T {
+      return visitor.visitSuperExpr(this);
     }
   }
 

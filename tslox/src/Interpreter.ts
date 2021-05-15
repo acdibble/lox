@@ -194,6 +194,23 @@ export default class Interpreter
     return value;
   }
 
+  visitSuperExpr(expr: Expr.Super): any {
+    const distance = this.locals.get(expr);
+    const superclass = this.environment.getAt(distance!, "super") as LoxClass;
+    const object = this.environment.getAt(distance! - 1, "this") as LoxInstance;
+
+    const method = superclass.findMethod(expr.method.lexeme);
+
+    if (!method) {
+      throw new RuntimeError(
+        expr.method,
+        `Undefined property '${expr.method.lexeme}'.`,
+      );
+    }
+
+    return method.bind(object);
+  }
+
   visitThisExpr(expr: Expr.This): any {
     return this.lookUpVariable(expr.keyword, expr);
   }
@@ -272,6 +289,11 @@ export default class Interpreter
 
     this.environment.define(stmt.name.lexeme, null);
 
+    if (superclass) {
+      this.environment = new Environment(this.environment);
+      this.environment.define("super", superclass);
+    }
+
     const classMethods: Record<string, LoxFunction> = Object.create(null);
     for (const method of stmt.classMethods) {
       const fn = new LoxFunction(method, this.environment, false);
@@ -301,6 +323,11 @@ export default class Interpreter
       stmt.name.lexeme,
       methods,
     );
+
+    if (superclass) {
+      this.environment = this.environment.enclosing!;
+    }
+
     this.environment.assign(stmt.name, klass);
   }
 

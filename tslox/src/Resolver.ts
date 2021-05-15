@@ -36,6 +36,7 @@ class Stack<T> {
 const enum ClassType {
   None,
   Class,
+  Subclass,
 }
 
 const enum FunctionType {
@@ -159,7 +160,13 @@ export default class Resolver
     }
 
     if (stmt.superclass) {
+      this.currentClass = ClassType.Subclass;
       this._resolve(stmt.superclass);
+      this.beginScope();
+      const token = stmt.superclass.name;
+      this.scopes.peek((scope) => {
+        scope.set("super", { token, state: VariableState.Read });
+      });
     }
 
     this.beginScope();
@@ -184,6 +191,8 @@ export default class Resolver
       this.resolveFunction(method, FunctionType.Method);
       this.endScope();
     }
+
+    if (stmt.superclass) this.endScope();
 
     this.define(stmt.name);
     this.currentClass = enclosingClass;
@@ -293,6 +302,19 @@ export default class Resolver
   visitSetExpr(expr: Expr.Set): void {
     this._resolve(expr.value);
     this._resolve(expr.object);
+  }
+
+  visitSuperExpr(expr: Expr.Super): void {
+    if (this.currentClass == ClassType.None) {
+      this.loxError(expr.keyword, "Can't use 'super' outside of a class.");
+    } else if (this.currentClass != ClassType.Subclass) {
+      this.loxError(
+        expr.keyword,
+        "Can't use 'super' in a class with no superclass.",
+      );
+    }
+
+    this.resolveLocal(expr, expr.keyword);
   }
 
   visitThisExpr(expr: Expr.This): void {

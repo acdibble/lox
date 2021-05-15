@@ -422,6 +422,16 @@ export default class Parser {
       return new Expr.Literal(this.previous().literal);
     }
 
+    if (this.match(TokenType.Super)) {
+      const keyword = this.previous();
+      this.consume(TokenType.Dot, "Expect '.' after 'super'.");
+      const method = this.consume(
+        TokenType.Identifier,
+        "Expect superclass method name.",
+      );
+      return new Expr.Super(keyword, method);
+    }
+
     if (this.match(TokenType.This)) return new Expr.This(this.previous());
 
     if (this.match(TokenType.Identifier)) {
