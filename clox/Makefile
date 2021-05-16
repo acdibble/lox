@@ -1,10 +1,10 @@
 OUT=clox.o
 
-clean:
-	rm ${OUT}
-
 build:
 	gcc -o ${OUT} src/*.c
+
+clean:
+	rm ${OUT}
 
 run:
 	./${OUT}
