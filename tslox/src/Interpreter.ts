@@ -4,6 +4,7 @@ import LoxCallable, { implementsLoxCallable } from "./LoxCallable.ts";
 import LoxClass from "./LoxClass.ts";
 import LoxFunction from "./LoxFunction.ts";
 import LoxInstance from "./LoxInstance.ts";
+import LoxMap from "./LoxMap.ts";
 import { LoxRuntimeError } from "./main.ts";
 import RuntimeError from "./RuntimeError.ts";
 import Stmt from "./Stmt.ts";
@@ -37,6 +38,10 @@ export default class Interpreter
           return "<native fn>";
         }
       }(),
+    );
+    this.globals.define(
+      "Map",
+      new LoxMap(),
     );
   }
 

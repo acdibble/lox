@@ -1,19 +1,20 @@
-import Interpreter from "./Interpreter.ts";
-import LoxCallable from "./LoxCallable.ts";
-import LoxFunction from "./LoxFunction.ts";
+import type Interpreter from "./Interpreter.ts";
+import type LoxCallable from "./LoxCallable.ts";
+import type LoxFunction from "./LoxFunction.ts";
 import LoxInstance from "./LoxInstance.ts";
+import type NativeFunction from "./NativeFunction.ts";
 
 export default class LoxClass extends LoxInstance implements LoxCallable {
   constructor(
     metaclass: LoxClass | null,
     private readonly superclass: LoxClass | null,
     readonly name: string,
-    private readonly methods: Record<string, LoxFunction>,
+    private readonly methods: Record<string, LoxFunction | NativeFunction>,
   ) {
     super(metaclass as any);
   }
 
-  findMethod(name: string): LoxFunction | undefined {
+  findMethod(name: string): LoxFunction | NativeFunction | undefined {
     return this.methods[name] ?? this.superclass?.findMethod(name);
   }
 
