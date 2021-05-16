@@ -1,0 +1,3 @@
+{
+  "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Chromium, IndentWidth: 2, AllowShortIfStatementsOnASingleLine: Always }"
+}
