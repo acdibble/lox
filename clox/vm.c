@@ -75,7 +75,7 @@ static InterpretResult run() {
         BINARY_OP(/);
         break;
       case OP_NEGATE:
-        *(vm.stackTop - 1) = -*(vm.stackTop - 1);
+        vm.stackTop[-1] = -vm.stackTop[-1];
         break;
       case OP_RETURN: {
         printValue(pop());
