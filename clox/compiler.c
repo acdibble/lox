@@ -10,11 +10,24 @@
 #include "debug.h"
 #endif
 
+typedef enum {
+  LOOP_NONE,
+  LOOP_FOR,
+  LOOP_WHILE,
+} LoopType;
+
+typedef struct {
+  LoopType loopType;
+  int scopeDepth;
+  int loopStart;
+} LoopInfo;
+
 typedef struct {
   Token current;
   Token previous;
   bool hadError;
   bool panicMode;
+  LoopInfo loopInfo;
 } Parser;
 
 typedef enum {
@@ -564,7 +577,15 @@ static void forStatement() {
     patchJump(bodyJump);
   }
 
+  LoopInfo loopInfo = {.loopStart = loopStart,
+                       .loopType = LOOP_WHILE,
+                       .scopeDepth = current->scopeDepth};
+  LoopInfo enclosingLoop = parser.loopInfo;
+  parser.loopInfo = loopInfo;
+
   statement();
+
+  parser.loopInfo = enclosingLoop;
 
   emitLoop(loopStart);
 
@@ -610,12 +631,40 @@ static void whileStatement() {
   int exitJump = emitJump(OP_JUMP_IF_FALSE);
 
   emitByte(OP_POP);
+
+  LoopInfo loopInfo = {.loopStart = loopStart,
+                       .loopType = LOOP_WHILE,
+                       .scopeDepth = current->scopeDepth};
+  LoopInfo enclosingLoop = parser.loopInfo;
+  parser.loopInfo = loopInfo;
+
   statement();
+
+  parser.loopInfo = enclosingLoop;
 
   emitLoop(loopStart);
 
   patchJump(exitJump);
   emitByte(OP_POP);
+}
+
+static void continueStatement() {
+  if (parser.loopInfo.loopType == LOOP_NONE) {
+    error("'continue' can only appear in a loop body.");
+    return;
+  }
+
+  consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
+
+  printf("parser.loopInfo.scopeDepth: %d\n", parser.loopInfo.scopeDepth);
+  printf("current->scopeDepth: %d\n", current->scopeDepth);
+
+  for (int i = current->localCount - 1;
+       i >= 0 && current->locals[i].depth > parser.loopInfo.scopeDepth; i--) {
+    emitByte(OP_POP);
+  }
+
+  emitLoop(parser.loopInfo.loopStart);
 }
 
 static void parseNextCase(bool defaultFound) {
@@ -722,6 +771,8 @@ static void statement() {
     beginScope();
     block();
     endScope();
+  } else if (match(TOKEN_CONTINUE)) {
+    continueStatement();
   } else {
     expressionStatement();
   }
@@ -735,6 +786,9 @@ bool compile(const char* source, Chunk* chunk) {
 
   parser.hadError = false;
   parser.panicMode = false;
+  parser.loopInfo.loopType = LOOP_NONE;
+  parser.loopInfo.scopeDepth = -1;
+  parser.loopInfo.loopStart = -1;
 
   advance();
 
