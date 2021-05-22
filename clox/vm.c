@@ -207,7 +207,7 @@ static InterpretResult run() {
       case OP_PRINT: {
         printValue(pop());
         printf("\n");
-        return INTERPRET_OK;
+        break;
       }
       case OP_RETURN: {
         // Exit interpreter
