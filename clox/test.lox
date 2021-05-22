@@ -1,8 +1,7 @@
 var breakfast = "cheerios";
-{
+if (false) {
   let breakfast = 1;
   print breakfast;
-  // breakfast = 2;
-  // print breakfast;
+} else {
+  print breakfast;
 }
-print breakfast;
