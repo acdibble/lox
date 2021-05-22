@@ -216,6 +216,9 @@ static InterpretResult run() {
       case OP_LOOP:
         vm.ip -= READ_SHORT();
         break;
+      case OP_DUP:
+        push(peek(0));
+        break;
       case OP_RETURN: {
         // Exit interpreter
         return INTERPRET_OK;

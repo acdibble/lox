@@ -1,3 +1,11 @@
-for (var loops = 0; loops < 5; loops = loops + 1) {
-  print loops;
+switch (2) {
+case 1:
+  print("one");
+case 2:
+  print("two");
+case 3:
+  print("three");
+default:
+  print("default");
 }
+print("after");

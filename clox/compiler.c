@@ -618,6 +618,60 @@ static void whileStatement() {
   emitByte(OP_POP);
 }
 
+static void parseNextCase(bool defaultFound) {
+#define CAN_EXPECT_STATEMENT                                                 \
+  !(check(TOKEN_CASE) || check(TOKEN_DEFAULT) || check(TOKEN_RIGHT_BRACE) || \
+    check(TOKEN_EOF))
+
+  if (!match(TOKEN_CASE) && !match(TOKEN_DEFAULT)) return;
+
+  bool isCaseType = parser.previous.type == TOKEN_CASE;
+  int nextCase = -1;
+  if (defaultFound) error("Cannot have any more cases after default.");
+
+  if (isCaseType) {
+    emitByte(OP_DUP);
+    expression();
+    consume(TOKEN_COLON, "Expect ':' after case expression.");
+    emitByte(OP_EQUAL);
+    nextCase = emitJump(OP_JUMP_IF_FALSE);
+    emitByte(OP_POP);
+  } else {
+    consume(TOKEN_COLON, "Expect ':' after 'default'.");
+  }
+
+  while (CAN_EXPECT_STATEMENT) {
+    statement();
+  }
+
+  int exitJump = -1;
+  if (isCaseType) {
+    exitJump = emitJump(OP_JUMP);
+    patchJump(nextCase);
+    emitByte(OP_POP);
+  }
+
+  parseNextCase(defaultFound || !isCaseType);
+
+  if (isCaseType) patchJump(exitJump);
+#undef CAN_EXPECT_STATEMENT
+}
+
+static void switchStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'switch'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
+  consume(TOKEN_LEFT_BRACE, "Expect '{' before switch cases.");
+
+  beginScope();
+  parseNextCase(false);
+
+  emitByte(OP_POP);
+
+  endScope();
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after switch cases.");
+}
+
 static void synchronize() {
   parser.panicMode = false;
 
@@ -633,6 +687,7 @@ static void synchronize() {
       case TOKEN_WHILE:
       case TOKEN_PRINT:
       case TOKEN_RETURN:
+      case TOKEN_SWITCH:
         return;
       default:
         break;
@@ -661,6 +716,8 @@ static void statement() {
     ifStatement();
   } else if (match(TOKEN_WHILE)) {
     whileStatement();
+  } else if (match(TOKEN_SWITCH)) {
+    switchStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     beginScope();
     block();
