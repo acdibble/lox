@@ -42,6 +42,7 @@ typedef struct {
 typedef struct {
   Token name;
   int depth;
+  bool constant;
 } Local;
 
 typedef struct {
@@ -207,6 +208,7 @@ static void addLocal(Token name) {
   Local* local = &current->locals[current->localCount++];
   local->name = name;
   local->depth = -1;
+  local->constant = false;
 }
 
 static void declareVariable() {
@@ -324,10 +326,12 @@ static void string(bool canAssign) {
 static void namedVariable(Token name, bool canAssign) {
   uint8_t getOp, setOp;
   int arg = resolveLocal(current, &name);
+  bool constant = false;
 
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
+    constant = current->locals[arg].depth > 0 && current->locals[arg].constant;
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
@@ -335,6 +339,7 @@ static void namedVariable(Token name, bool canAssign) {
   }
 
   if (canAssign && match(TOKEN_EQUAL)) {
+    if (constant) error("Cannot reassign variable declared with 'let'.");
     expression();
     emitBytes(setOp, (uint8_t)arg);
   } else {
@@ -447,14 +452,24 @@ static void block() {
 }
 
 static void varDeclaration() {
+  bool constant = parser.previous.type == TOKEN_LET;
   uint8_t global = parseVariable("Expect variable name.");
 
   if (match(TOKEN_EQUAL)) {
     expression();
-  } else {
+  } else if (!constant) {
     emitByte(OP_NIL);
+  } else {
+    error("Expect initializer for 'let' assignment.");
   }
+
   consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.");
+
+  if (current->scopeDepth > 0) {
+    current->locals[current->localCount - 1].constant = constant;
+  } else if (constant) {
+    error("Cannot perform 'let' assignment in global scope.");
+  }
 
   defineVariable(global);
 }
@@ -479,6 +494,7 @@ static void synchronize() {
     switch (parser.current.type) {
       case TOKEN_CLASS:
       case TOKEN_FUN:
+      case TOKEN_LET:
       case TOKEN_VAR:
       case TOKEN_FOR:
       case TOKEN_IF:
@@ -495,7 +511,7 @@ static void synchronize() {
 }
 
 static void declaration() {
-  if (match(TOKEN_VAR)) {
+  if (match(TOKEN_VAR) || match(TOKEN_LET)) {
     varDeclaration();
   } else {
     statement();

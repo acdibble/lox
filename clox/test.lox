@@ -1,7 +1,8 @@
 var breakfast = "cheerios";
 {
-  var beverage = "cafe au lait";
-  var breakfast = "beignets with " + beverage;
+  let breakfast = 1;
   print breakfast;
+  // breakfast = 2;
+  // print breakfast;
 }
 print breakfast;
