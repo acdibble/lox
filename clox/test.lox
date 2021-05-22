@@ -1,5 +1,4 @@
-var breakfast;
-true and (breakfast = "funions");
-print breakfast;
-false or (breakfast = "nothing");
-print breakfast;
+var loops = 0;
+
+while (loops < 5) loops = loops + 1;
+print loops;
