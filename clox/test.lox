@@ -1,7 +1,5 @@
-var breakfast = "cheerios";
-if (false) {
-  let breakfast = 1;
-  print breakfast;
-} else {
-  print breakfast;
-}
+var breakfast;
+true and (breakfast = "funions");
+print breakfast;
+false or (breakfast = "nothing");
+print breakfast;
