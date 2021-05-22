@@ -1,4 +1,3 @@
-var loops = 0;
-
-while (loops < 5) loops = loops + 1;
-print loops;
+for (var loops = 0; loops < 5; loops = loops + 1) {
+  print loops;
+}
