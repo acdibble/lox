@@ -10,6 +10,8 @@
 #include "debug.h"
 #endif
 
+#define MAX_BREAKS 256
+
 typedef enum {
   LOOP_NONE,
   LOOP_FOR,
@@ -20,6 +22,8 @@ typedef struct {
   LoopType loopType;
   int scopeDepth;
   int loopStart;
+  int breaks[MAX_BREAKS];
+  int breakCount;
 } LoopInfo;
 
 typedef struct {
@@ -216,6 +220,7 @@ static void statement();
 static void declaration();
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
+static void patchBreaks();
 
 static uint8_t identifierConstant(Token* name) {
   return makeConstant(OBJ_VAL(copyString(name->start, name->length)));
@@ -578,6 +583,7 @@ static void forStatement() {
   }
 
   LoopInfo loopInfo = {.loopStart = loopStart,
+                       .breakCount = 0,
                        .loopType = LOOP_WHILE,
                        .scopeDepth = current->scopeDepth};
   LoopInfo enclosingLoop = parser.loopInfo;
@@ -585,14 +591,15 @@ static void forStatement() {
 
   statement();
 
-  parser.loopInfo = enclosingLoop;
-
   emitLoop(loopStart);
 
   if (exitJump != -1) {
     patchJump(exitJump);
     emitByte(OP_POP);
   }
+
+  patchBreaks();
+  parser.loopInfo = enclosingLoop;
 
   endScope();
 }
@@ -633,6 +640,7 @@ static void whileStatement() {
   emitByte(OP_POP);
 
   LoopInfo loopInfo = {.loopStart = loopStart,
+                       .breakCount = 0,
                        .loopType = LOOP_WHILE,
                        .scopeDepth = current->scopeDepth};
   LoopInfo enclosingLoop = parser.loopInfo;
@@ -640,11 +648,13 @@ static void whileStatement() {
 
   statement();
 
-  parser.loopInfo = enclosingLoop;
-
   emitLoop(loopStart);
 
   patchJump(exitJump);
+
+  patchBreaks();
+  parser.loopInfo = enclosingLoop;
+
   emitByte(OP_POP);
 }
 
@@ -656,15 +666,34 @@ static void continueStatement() {
 
   consume(TOKEN_SEMICOLON, "Expect ';' after 'continue'.");
 
-  printf("parser.loopInfo.scopeDepth: %d\n", parser.loopInfo.scopeDepth);
-  printf("current->scopeDepth: %d\n", current->scopeDepth);
-
   for (int i = current->localCount - 1;
        i >= 0 && current->locals[i].depth > parser.loopInfo.scopeDepth; i--) {
     emitByte(OP_POP);
   }
 
   emitLoop(parser.loopInfo.loopStart);
+}
+
+static void patchBreaks() {
+  for (int i = 0; i < parser.loopInfo.breakCount; i++) {
+    patchJump(parser.loopInfo.breaks[i]);
+  }
+}
+
+static void breakStatement() {
+  if (parser.loopInfo.loopType == LOOP_NONE) {
+    error("'break' can only appear in a loop body.");
+    return;
+  }
+
+  consume(TOKEN_SEMICOLON, "Expect ';' after 'break'.");
+
+  if (parser.loopInfo.breakCount == MAX_BREAKS) {
+    error("Max 'break' statement count exceeded.");
+    return;
+  }
+
+  parser.loopInfo.breaks[parser.loopInfo.breakCount++] = emitJump(OP_JUMP);
 }
 
 static void parseNextCase(bool defaultFound) {
@@ -773,6 +802,8 @@ static void statement() {
     endScope();
   } else if (match(TOKEN_CONTINUE)) {
     continueStatement();
+  } else if (match(TOKEN_BREAK)) {
+    breakStatement();
   } else {
     expressionStatement();
   }

@@ -29,6 +29,7 @@ typedef enum {
   TOKEN_NUMBER,
   // Keywords.
   TOKEN_AND,
+  TOKEN_BREAK,
   TOKEN_CASE,
   TOKEN_CLASS,
   TOKEN_CONTINUE,
