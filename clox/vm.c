@@ -275,8 +275,17 @@ static InterpretResult run() {
         break;
       }
       case OP_RETURN: {
-        // Exit interpreter
-        return INTERPRET_OK;
+        Value result = pop();
+        vm.frameCount--;
+        if (vm.frameCount == 0) {
+          pop();
+          return INTERPRET_OK;
+        }
+
+        vm.stackTop = frame->slots;
+        push(result);
+        frame = &vm.frames[vm.frameCount - 1];
+        break;
       }
     }
   }
@@ -293,10 +302,6 @@ InterpretResult interpret(const char* source) {
   if (function == NULL) return INTERPRET_COMPILE_ERROR;
 
   push(OBJ_VAL(function));
-  CallFrame* frame = &vm.frames[vm.frameCount++];
-  frame->function = function;
-  frame->ip = function->chunk.code;
-  frame->slots = vm.stack;
   call(function, 0);
 
   return run();
