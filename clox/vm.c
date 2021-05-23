@@ -140,10 +140,10 @@ static void concatenate() {
 
 static InterpretResult run() {
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
+  register uint8_t* ip = frame->ip;
 
-#define READ_BYTE() (*frame->ip++)
-#define READ_SHORT() \
-  (frame->ip += 2, (uint16_t)((frame->ip[-2] << 8) | frame->ip[-1]))
+#define READ_BYTE() (*ip++)
+#define READ_SHORT() (ip += 2, (uint16_t)((ip[-2] << 8) | ip[-1]))
 #define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(valueType, op)                      \
@@ -156,6 +156,12 @@ static InterpretResult run() {
     double a = AS_NUMBER(pop());                      \
     push(valueType(a op b));                          \
   } while (false)
+#define UPDATE_FRAME()                     \
+  do {                                     \
+    frame->ip = ip;                        \
+    frame = &vm.frames[vm.frameCount - 1]; \
+    ip = frame->ip;                        \
+  } while (false)
 
   while (true) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -167,7 +173,7 @@ static InterpretResult run() {
     }
     printf("\n");
     disassembleInstruction(&frame->function->chunk,
-                           (int)(frame->ip - frame->function->chunk.code));
+                           (int)(ip - frame->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -274,17 +280,20 @@ static InterpretResult run() {
         break;
       }
       case OP_JUMP: {
-        frame->ip += READ_SHORT();
+        uint8_t offset = READ_SHORT();
+        ip += offset;
         break;
       }
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
-        if (isFalsy(peek(0))) frame->ip += offset;
+        if (isFalsy(peek(0))) ip += offset;
         break;
       }
-      case OP_LOOP:
-        frame->ip -= READ_SHORT();
+      case OP_LOOP: {
+        uint8_t offset = READ_SHORT();
+        ip -= offset;
         break;
+      }
       case OP_DUP:
         push(peek(0));
         break;
@@ -293,7 +302,7 @@ static InterpretResult run() {
         if (!callValue(peek(argCount), argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
-        frame = &vm.frames[vm.frameCount - 1];
+        UPDATE_FRAME();
         break;
       }
       case OP_RETURN: {
@@ -306,7 +315,7 @@ static InterpretResult run() {
 
         vm.stackTop = frame->slots;
         push(result);
-        frame = &vm.frames[vm.frameCount - 1];
+        UPDATE_FRAME();
         break;
       }
     }
@@ -317,6 +326,7 @@ static InterpretResult run() {
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP
+#undef UPDATE_FRAME
 }
 
 InterpretResult interpret(const char* source) {
