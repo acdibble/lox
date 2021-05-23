@@ -156,18 +156,13 @@ static InterpretResult run() {
 #define BINARY_OP(valueType, op)                      \
   do {                                                \
     if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
+      frame->ip = ip;                                 \
       runtimeError("Operands must be numbers.");      \
       return INTERPRET_RUNTIME_ERROR;                 \
     }                                                 \
     double b = AS_NUMBER(pop());                      \
     double a = AS_NUMBER(pop());                      \
     push(valueType(a op b));                          \
-  } while (false)
-#define UPDATE_FRAME()                     \
-  do {                                     \
-    frame->ip = ip;                        \
-    frame = &vm.frames[vm.frameCount - 1]; \
-    ip = frame->ip;                        \
   } while (false)
 
   while (true) {
@@ -216,6 +211,7 @@ static InterpretResult run() {
         ObjString* name = READ_STRING();
         Value value;
         if (!tableGet(&vm.globals, name, &value)) {
+          frame->ip = ip;
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -232,6 +228,7 @@ static InterpretResult run() {
         ObjString* name = READ_STRING();
         if (tableSet(&vm.globals, name, peek(0))) {
           tableDelete(&vm.globals, name);
+          frame->ip = ip;
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -257,6 +254,7 @@ static InterpretResult run() {
           double a = AS_NUMBER(pop());
           push(NUMBER_VAL(a + b));
         } else {
+          frame->ip = ip;
           runtimeError("Operands must be two numbers or two strings.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -276,6 +274,7 @@ static InterpretResult run() {
         break;
       case OP_NEGATE:
         if (!IS_NUMBER(peek(0))) {
+          frame->ip = ip;
           runtimeError("Operand must be a number.");
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -306,10 +305,12 @@ static InterpretResult run() {
         break;
       case OP_CALL: {
         int argCount = READ_BYTE();
+        frame->ip = ip;
         if (!callValue(peek(argCount), argCount)) {
           return INTERPRET_RUNTIME_ERROR;
         }
-        UPDATE_FRAME();
+        frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         break;
       }
       case OP_RETURN: {
@@ -322,7 +323,8 @@ static InterpretResult run() {
 
         vm.stackTop = frame->slots;
         push(result);
-        UPDATE_FRAME();
+        frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
         break;
       }
     }
