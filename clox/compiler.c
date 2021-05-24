@@ -501,6 +501,20 @@ static void namedVariable(Token name, bool canAssign) {
   } else if ((arg = resolveUpvalue(current, &name)) != -1) {
     getOp = OP_GET_UPVALUE;
     setOp = OP_SET_UPVALUE;
+    Upvalue* upvalue = &current->upvalues[arg];
+    Compiler* compiler = current;
+    while (!upvalue->isLocal) {
+      compiler = compiler->enclosing;
+      for (int i = 0; i < UINT8_COUNT; i++) {
+        Upvalue* currentUpvalue = &compiler->upvalues[i];
+        if (currentUpvalue == NULL) break;
+        if (currentUpvalue->index == upvalue->index) {
+          upvalue = currentUpvalue;
+          break;
+        }
+      }
+    }
+    constant = compiler->enclosing->locals[upvalue->index].constant;
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;

@@ -2,7 +2,7 @@ var globalSet;
 var globalGet;
 
 fun main() {
-  var a = "initial";
+  let a = "initial";
 
   fun set() { a = "updated"; }
   fun get() { print a; }
