@@ -703,11 +703,19 @@ static void expressionStatement() {
 static void forStatement() {
   beginScope();
 
+  int loopVariable = -1;
+  Token loopVariableName;
+  loopVariableName.start = NULL;
+
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
   if (match(TOKEN_SEMICOLON)) {
     // No initializer.
   } else if (match(TOKEN_VAR)) {
+    loopVariableName = parser.current;
+
     varDeclaration();
+
+    loopVariable = current->localCount - 1;
   } else {
     expressionStatement();
   }
@@ -738,12 +746,30 @@ static void forStatement() {
 
   LoopInfo loopInfo = {.loopStart = loopStart,
                        .breakCount = 0,
-                       .loopType = LOOP_WHILE,
+                       .loopType = LOOP_FOR,
                        .scopeDepth = current->scopeDepth};
   LoopInfo enclosingLoop = parser.loopInfo;
   parser.loopInfo = loopInfo;
 
+  int innerVariable = -1;
+  if (loopVariable != -1) {
+    beginScope();
+    emitBytes(OP_GET_LOCAL, (uint8_t)loopVariable);
+    addLocal(loopVariableName);
+    markInitialized();
+
+    innerVariable = current->localCount - 1;
+  }
+
   statement();
+
+  if (loopVariable != -1) {
+    emitBytes(OP_GET_LOCAL, (uint8_t)innerVariable);
+    emitBytes(OP_SET_LOCAL, (uint8_t)loopVariable);
+    emitByte(OP_POP);
+
+    endScope();
+  }
 
   emitLoop(loopStart);
 
