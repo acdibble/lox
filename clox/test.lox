@@ -2,5 +2,15 @@ class Pair {}
 
 var pair = Pair();
 pair.first = 1;
-pair.second = 2;
+print hasField(pair, "first");
+print hasField(pair, "second");
+setField(pair, "second", 2);
+print hasField(pair, "second");
+if (hasField(pair, "third")) {
+  print "this doesn't happen";
+} else {
+  pair.third = 3;
+}
+
+print deleteField(pair, "third");
 print pair.first + pair.second; // 3.

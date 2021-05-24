@@ -10,9 +10,49 @@
 #include "vm.h"
 
 VM vm;
+static void runtimeError(const char* format, ...);
 
-static Value clockNative(int argCount, Value* args) {
+static Value clockNative(Value* args, bool* result) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
+
+static Value hasFieldNative(Value* args, bool* result) {
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  ObjString* field = AS_STRING(args[1]);
+
+  Value value;
+  return BOOL_VAL(tableGet(&instance->fields, field, &value));
+}
+
+static Value setFieldNative(Value* args, bool* result) {
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  ObjString* field = AS_STRING(args[1]);
+
+  tableSet(&instance->fields, field, args[2]);
+  return args[2];
+}
+
+static Value getFieldNative(Value* args, bool* result) {
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  ObjString* field = AS_STRING(args[1]);
+
+  Value value;
+  if (tableGet(&instance->fields, field, &value)) return value;
+
+  *result = false;
+  runtimeError("Undefined property '%s'.", field->chars);
+  return NIL_VAL;
+}
+
+static Value deleteFieldNative(Value* args, bool* result) {
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  ObjString* field = AS_STRING(args[1]);
+
+  if (!tableDelete(&instance->fields, field)) {
+    *result = false;
+    runtimeError("Undefined property '%s'.", field->chars);
+  }
+  return NIL_VAL;
 }
 
 static void resetStack() {
@@ -66,6 +106,10 @@ void initVM() {
   initTable(&vm.strings);
 
   defineNative("clock", clockNative, 0);
+  defineNative("hasField", hasFieldNative, 2);
+  defineNative("setField", setFieldNative, 3);
+  defineNative("getField", getFieldNative, 2);
+  defineNative("deleteField", deleteFieldNative, 2);
 }
 
 void freeVM() {
@@ -112,7 +156,9 @@ static bool callNative(ObjNative* native, int argCount) {
     runtimeError("Expected %d arguments but got %d.", native->arity, argCount);
     return false;
   }
-  Value result = native->function(argCount, vm.stackTop - argCount);
+  bool success = true;
+  Value result = native->function(vm.stackTop - argCount, &success);
+  if (!success) return false;
   vm.stackTop -= argCount + 1;
   push(result);
   return true;
