@@ -12,47 +12,59 @@
 VM vm;
 static void runtimeError(const char* format, ...);
 
-static Value clockNative(Value* args, bool* result) {
-  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+static bool clockNative(Value* args, Value* result) {
+  *result = NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+  return true;
 }
 
-static Value hasFieldNative(Value* args, bool* result) {
+static bool hasFieldNative(Value* args, Value* result) {
+  if (!IS_INSTANCE(args[0]) || !IS_STRING(args[1])) {
+    return false;
+  }
   ObjInstance* instance = AS_INSTANCE(args[0]);
   ObjString* field = AS_STRING(args[1]);
 
   Value value;
-  return BOOL_VAL(tableGet(&instance->fields, field, &value));
+  *result = BOOL_VAL(tableGet(&instance->fields, field, &value));
+  return true;
 }
 
-static Value setFieldNative(Value* args, bool* result) {
+static bool setFieldNative(Value* args, Value* result) {
+  if (!IS_INSTANCE(args[0]) || !IS_STRING(args[1])) {
+    return false;
+  }
   ObjInstance* instance = AS_INSTANCE(args[0]);
   ObjString* field = AS_STRING(args[1]);
 
   tableSet(&instance->fields, field, args[2]);
-  return args[2];
+  *result = args[2];
+  return true;
 }
 
-static Value getFieldNative(Value* args, bool* result) {
-  ObjInstance* instance = AS_INSTANCE(args[0]);
-  ObjString* field = AS_STRING(args[1]);
-
-  Value value;
-  if (tableGet(&instance->fields, field, &value)) return value;
-
-  *result = false;
-  runtimeError("Undefined property '%s'.", field->chars);
-  return NIL_VAL;
-}
-
-static Value deleteFieldNative(Value* args, bool* result) {
-  ObjInstance* instance = AS_INSTANCE(args[0]);
-  ObjString* field = AS_STRING(args[1]);
-
-  if (!tableDelete(&instance->fields, field)) {
-    *result = false;
-    runtimeError("Undefined property '%s'.", field->chars);
+static bool getFieldNative(Value* args, Value* result) {
+  if (!IS_INSTANCE(args[0]) || !IS_STRING(args[1])) {
+    return false;
   }
-  return NIL_VAL;
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  ObjString* field = AS_STRING(args[1]);
+
+  if (tableGet(&instance->fields, field, result)) return true;
+
+  runtimeError("Undefined property '%s'.", field->chars);
+  return false;
+}
+
+static bool deleteFieldNative(Value* args, Value* result) {
+  if (!IS_INSTANCE(args[0]) || !IS_STRING(args[1])) {
+    return false;
+  }
+  ObjInstance* instance = AS_INSTANCE(args[0]);
+  ObjString* field = AS_STRING(args[1]);
+
+  if (tableDelete(&instance->fields, field)) return true;
+
+  runtimeError("Undefined property '%s'.", field->chars);
+  return false;
 }
 
 static void resetStack() {
@@ -156,8 +168,8 @@ static bool callNative(ObjNative* native, int argCount) {
     runtimeError("Expected %d arguments but got %d.", native->arity, argCount);
     return false;
   }
-  bool success = true;
-  Value result = native->function(vm.stackTop - argCount, &success);
+  Value result = NIL_VAL;
+  bool success = native->function(vm.stackTop - argCount, &result);
   if (!success) return false;
   vm.stackTop -= argCount + 1;
   push(result);
