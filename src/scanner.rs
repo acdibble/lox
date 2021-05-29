@@ -1,5 +1,6 @@
 use std::iter::{Enumerate, Peekable};
 
+#[derive(Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum TokenKind {
   // Single-character tokens.
@@ -46,6 +47,7 @@ pub enum TokenKind {
   While,
 
   Error,
+  EOF,
 }
 
 pub struct Token<'a> {
@@ -64,14 +66,14 @@ pub struct Scanner<'a> {
 impl<'a> Scanner<'a> {
   pub fn new(source: &'a String) -> Scanner<'a> {
     Scanner {
-      source: source,
+      source,
       lines: 0,
       start: 0,
       iter: source.chars().enumerate().peekable(),
     }
   }
 
-  fn advance(&mut self) -> Option<(usize, char)> {
+  pub fn advance(&mut self) -> Option<(usize, char)> {
     self.iter.next()
   }
 
@@ -144,23 +146,21 @@ impl<'a> Scanner<'a> {
     None
   }
 
-  fn string(&mut self) -> Option<Token<'a>> {
+  fn string(&mut self) -> Token<'a> {
     while let Some((_, c)) = self.iter.next_if(|&(_, c)| c != '"') {
       if c == '\n' {
         self.lines += 1;
       }
     }
 
-    let token = if self.match_current('"') {
+    if self.match_current('"') {
       self.make_token(TokenKind::String)
     } else {
       self.make_error_token("Unterminated string.")
-    };
-
-    Some(token)
+    }
   }
 
-  fn number(&mut self) -> Option<Token<'a>> {
+  fn number(&mut self) -> Token<'a> {
     while self.iter.next_if(|&(_, c)| c.is_digit(10)).is_some() {}
 
     // Look for a fractional part.
@@ -176,10 +176,10 @@ impl<'a> Scanner<'a> {
       }
     }
 
-    Some(self.make_token(TokenKind::Number))
+    self.make_token(TokenKind::Number)
   }
 
-  fn identifier(&mut self) -> Option<Token<'a>> {
+  fn identifier(&mut self) -> Token<'a> {
     while self
       .iter
       .next_if(|&(_, c)| c.is_ascii_alphabetic() || c == '_')
@@ -207,26 +207,26 @@ impl<'a> Scanner<'a> {
       _ => TokenKind::Identifier,
     };
 
-    Some(Token {
+    Token {
       kind: kind,
       lexeme: lexeme,
       line: self.lines,
-    })
+    }
   }
 
-  pub fn scan_token(&mut self) -> Option<Token<'a>> {
+  pub fn scan_token(&mut self) -> Token<'a> {
     self.skip_whitespace();
 
     let next = self.advance();
 
     if next.is_none() {
-      return None;
+      return self.make_token(TokenKind::EOF);
     }
 
     let (start, c) = next.unwrap();
     self.start = start;
 
-    let token = match c {
+    match c {
       '(' => self.make_token(TokenKind::LeftParen),
       ')' => self.make_token(TokenKind::RightParen),
       '{' => self.make_token(TokenKind::LeftBrace),
@@ -270,8 +270,6 @@ impl<'a> Scanner<'a> {
       '0'..='9' => return self.number(),
       'a'..='z' | 'A'..='Z' | '_' => return self.identifier(),
       _ => self.make_error_token("Unexpected character."),
-    };
-
-    Some(token)
+    }
   }
 }

@@ -30,8 +30,17 @@ impl<'a> VM<'a> {
   // }
 
   pub fn interpret(&mut self, source: &String) -> InterpretResult {
-    compile(source);
-    return InterpretResult::Ok;
+    let mut vm = VM::new();
+    let mut chunk = Chunk::new();
+
+    if !compile(source, &mut chunk) {
+      return InterpretResult::CompileError;
+    }
+
+    vm.chunk = Some(&chunk);
+    vm.ip = 0;
+
+    return vm.run();
   }
 
   fn push(&mut self, value: Value) {
