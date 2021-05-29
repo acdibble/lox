@@ -12,7 +12,6 @@ pub struct VM<'a> {
   chunk: Option<&'a Chunk>,
   ip: usize,
   stack: Vec<Value>,
-  stack_top: usize,
 }
 
 impl<'a> VM<'a> {
@@ -21,7 +20,6 @@ impl<'a> VM<'a> {
       chunk: None,
       ip: 0,
       stack: Vec::new(),
-      stack_top: 0,
     }
   }
 
@@ -58,9 +56,9 @@ impl<'a> VM<'a> {
 
     loop {
       print!("          ");
-      for i in 0..self.stack_top {
+      for value in self.stack.iter() {
         print!("[ ");
-        print_value(self.stack[i]);
+        print_value(*value);
         print!(" ]");
       }
       println!("");
