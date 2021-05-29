@@ -5,6 +5,11 @@ use std::convert::TryInto;
 #[repr(u8)]
 pub enum Op {
   Constant,
+  Add,
+  Subtract,
+  Multiply,
+  Divide,
+  Negate,
   Return,
 }
 
@@ -13,17 +18,39 @@ impl TryFrom<u8> for Op {
 
   fn try_from(v: u8) -> Result<Self, Self::Error> {
     match v {
-      x if x == Op::Return as u8 => Ok(Op::Return),
       x if x == Op::Constant as u8 => Ok(Op::Constant),
+      x if x == Op::Negate as u8 => Ok(Op::Negate),
+      x if x == Op::Add as u8 => Ok(Op::Add),
+      x if x == Op::Subtract as u8 => Ok(Op::Subtract),
+      x if x == Op::Multiply as u8 => Ok(Op::Multiply),
+      x if x == Op::Divide as u8 => Ok(Op::Divide),
+      x if x == Op::Return as u8 => Ok(Op::Return),
       _ => Err(v),
     }
   }
 }
 
+impl TryFrom<&u8> for Op {
+  type Error = u8;
+
+  fn try_from(v: &u8) -> Result<Self, Self::Error> {
+    match *v {
+      x if x == Op::Constant as u8 => Ok(Op::Constant),
+      x if x == Op::Negate as u8 => Ok(Op::Negate),
+      x if x == Op::Add as u8 => Ok(Op::Add),
+      x if x == Op::Subtract as u8 => Ok(Op::Subtract),
+      x if x == Op::Multiply as u8 => Ok(Op::Multiply),
+      x if x == Op::Divide as u8 => Ok(Op::Divide),
+      x if x == Op::Return as u8 => Ok(Op::Return),
+      _ => Err(*v),
+    }
+  }
+}
+
 pub struct Chunk {
-  code: Vec<u8>,
-  constants: Vec<Value>,
-  lines: Vec<i32>,
+  pub code: Vec<u8>,
+  pub constants: Vec<Value>,
+  pub lines: Vec<i32>,
 }
 
 impl Chunk {
@@ -57,7 +84,7 @@ impl Chunk {
     }
   }
 
-  fn disassemble_instruction(&self, offset: usize) -> usize {
+  pub fn disassemble_instruction(&self, offset: usize) -> usize {
     print!("{:04} ", offset);
 
     if offset > 0 && self.lines[offset] == self.lines[offset - 1] {
@@ -68,8 +95,13 @@ impl Chunk {
 
     let instruction = *self.code.get(offset).expect("Expect instruction");
     match instruction.try_into() {
-      Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
       Ok(Op::Constant) => self.constant_instruction("OP_CONSTANT", offset),
+      Ok(Op::Add) => self.simple_instruction("OP_ADD", offset),
+      Ok(Op::Subtract) => self.simple_instruction("OP_SUBTRACT", offset),
+      Ok(Op::Multiply) => self.simple_instruction("OP_MULTIPLY", offset),
+      Ok(Op::Divide) => self.simple_instruction("OP_DIVIDE", offset),
+      Ok(Op::Negate) => self.simple_instruction("OP_NEGATE", offset),
+      Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
       Err(v) => {
         println!("Unknown opcode {}", v);
         offset + 1
