@@ -1,7 +1,9 @@
 use crate::chunk::*;
+use crate::compiler::*;
 use crate::value::*;
 use std::convert::TryInto;
 
+#[derive(PartialEq)]
 pub enum InterpretResult {
   Ok,
   CompileError,
@@ -27,9 +29,9 @@ impl<'a> VM<'a> {
   //   self.stack_top = 0;
   // }
 
-  pub fn interpret(&mut self, chunk: &'a Chunk) -> InterpretResult {
-    self.chunk = Some(chunk);
-    return self.run();
+  pub fn interpret(&mut self, source: &String) -> InterpretResult {
+    compile(source);
+    return InterpretResult::Ok;
   }
 
   fn push(&mut self, value: Value) {

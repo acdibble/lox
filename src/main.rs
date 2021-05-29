@@ -1,32 +1,48 @@
 mod chunk;
+mod compiler;
+mod scanner;
 mod value;
 mod vm;
 
-use chunk::*;
 use vm::*;
 
+fn repl(vm: &mut VM) {
+    use std::io::{self, BufRead, Write};
+
+    let stdin = io::stdin();
+    let mut lines = stdin.lock().lines();
+    loop {
+        print!("> ");
+        io::stdout().flush().expect("Couldn't flush stdout");
+        match lines.next() {
+            Some(Ok(line)) => vm.interpret(&line),
+            _ => break,
+        };
+    }
+}
+
+fn run_file(vm: &mut VM, path: &String) {
+    use std::fs;
+
+    let source = fs::read_to_string(path).expect("Failed to read filed");
+    let result = vm.interpret(&source);
+
+    if result == InterpretResult::CompileError {
+        std::process::exit(65);
+    }
+    if result == InterpretResult::RuntimeError {
+        std::process::exit(70);
+    }
+}
+
 fn main() {
-    let mut chunk = Chunk::new();
-
-    let constant = chunk.add_constant(1.2);
-    chunk.write(Op::Constant as u8, 123);
-    chunk.write(constant, 123);
-
-    let constant = chunk.add_constant(3.4);
-    chunk.write(Op::Constant as u8, 123);
-    chunk.write(constant, 123);
-
-    chunk.write(Op::Add as u8, 123);
-
-    let constant = chunk.add_constant(5.6);
-    chunk.write(Op::Constant as u8, 123);
-    chunk.write(constant, 123);
-
-    chunk.write(Op::Divide as u8, 123);
-    chunk.write(Op::Return as u8, 123);
-    chunk.disassemble("test chunk");
+    use std::env;
 
     let mut vm = VM::new();
-
-    vm.interpret(&chunk);
+    let args: Vec<String> = env::args().collect();
+    match args.len() {
+        1 => repl(&mut vm),
+        2 => run_file(&mut vm, &args[1]),
+        _ => eprintln!("Usage: rustlox [path]"),
+    }
 }
