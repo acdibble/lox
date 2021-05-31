@@ -1,9 +1,9 @@
 use crate::chunk::*;
 use crate::scanner::*;
 use crate::value::*;
-use std::convert::{TryFrom, TryInto};
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
+#[repr(u8)]
 enum Precedence {
   None,
   Assignment, // =
@@ -18,23 +18,19 @@ enum Precedence {
   Primary,
 }
 
-impl TryFrom<i32> for Precedence {
-  type Error = i32;
-
-  fn try_from(v: i32) -> Result<Self, Self::Error> {
-    match v {
-      x if x == Precedence::None as i32 => Ok(Precedence::None),
-      x if x == Precedence::Assignment as i32 => Ok(Precedence::Assignment),
-      x if x == Precedence::Or as i32 => Ok(Precedence::Or),
-      x if x == Precedence::And as i32 => Ok(Precedence::And),
-      x if x == Precedence::Equality as i32 => Ok(Precedence::Equality),
-      x if x == Precedence::Comparison as i32 => Ok(Precedence::Comparison),
-      x if x == Precedence::Term as i32 => Ok(Precedence::Term),
-      x if x == Precedence::Factor as i32 => Ok(Precedence::Factor),
-      x if x == Precedence::Unary as i32 => Ok(Precedence::Unary),
-      x if x == Precedence::Call as i32 => Ok(Precedence::Call),
-      x if x == Precedence::Primary as i32 => Ok(Precedence::Primary),
-      _ => Err(v),
+impl Precedence {
+  fn higher(&self) -> Precedence {
+    match self {
+      Precedence::None => Precedence::Assignment,
+      Precedence::Assignment => Precedence::Or,
+      Precedence::Or => Precedence::And,
+      Precedence::And => Precedence::Equality,
+      Precedence::Equality => Precedence::Comparison,
+      Precedence::Comparison => Precedence::Term,
+      Precedence::Term => Precedence::Factor,
+      Precedence::Factor => Precedence::Unary,
+      Precedence::Unary => Precedence::Call,
+      _ => Precedence::Primary,
     }
   }
 }
@@ -63,7 +59,11 @@ impl<'a> Compiler<'a> {
       TokenKind::Plus => (None, Some(Self::binary), Precedence::Term),
       TokenKind::Slash => (None, Some(Self::binary), Precedence::Factor),
       TokenKind::Star => (None, Some(Self::binary), Precedence::Factor),
+      TokenKind::Bang => (Some(Self::unary), None, Precedence::None),
       TokenKind::Number => (Some(Self::number), None, Precedence::None),
+      TokenKind::False => (Some(Self::literal), None, Precedence::None),
+      TokenKind::True => (Some(Self::literal), None, Precedence::None),
+      TokenKind::Nil => (Some(Self::literal), None, Precedence::None),
       _ => (None, None, Precedence::None),
     }
   }
@@ -179,9 +179,7 @@ impl<'a> Compiler<'a> {
   fn binary(&mut self) {
     let operator_type = self.previous_kind();
     let rule = Self::get_rule(operator_type);
-    let precedence: Precedence = (rule.2 as i32 + 1)
-      .try_into()
-      .expect("Could not convert precedence.");
+    let precedence = rule.2.higher();
     self.parse_precedence(precedence);
 
     match operator_type {
@@ -190,6 +188,15 @@ impl<'a> Compiler<'a> {
       TokenKind::Star => self.emit_byte(Op::Multiply as u8),
       TokenKind::Slash => self.emit_byte(Op::Divide as u8),
       _ => unreachable!(),
+    }
+  }
+
+  fn literal(&mut self) {
+    match self.previous_kind() {
+      TokenKind::False => self.emit_byte(Op::False as u8),
+      TokenKind::Nil => self.emit_byte(Op::Nil as u8),
+      TokenKind::True => self.emit_byte(Op::True as u8),
+      _ => (),
     }
   }
 
@@ -208,7 +215,7 @@ impl<'a> Compiler<'a> {
       .parse()
       .expect("Failed to parse string into float");
 
-    self.emit_constant(value);
+    self.emit_constant(Value::Number(value));
   }
 
   fn unary(&mut self) {
@@ -218,6 +225,7 @@ impl<'a> Compiler<'a> {
 
     match operator_type {
       TokenKind::Minus => self.emit_byte(Op::Negate as u8),
+      TokenKind::Bang => self.emit_byte(Op::Not as u8),
       _ => unreachable!(),
     }
   }
@@ -225,12 +233,12 @@ impl<'a> Compiler<'a> {
   fn parse_precedence(&mut self, precedence: Precedence) {
     self.advance();
     let prefix_rule = Self::get_rule(self.previous_kind()).0;
-    if let Some(fun) = prefix_rule {
-      fun(self)
-    } else {
+    if prefix_rule.is_none() {
       self.error("Expect expression.");
       return;
     }
+
+    prefix_rule.unwrap()(self);
 
     while precedence <= Self::get_rule(self.current_kind()).2 {
       self.advance();

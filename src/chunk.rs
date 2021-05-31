@@ -5,10 +5,14 @@ use std::convert::TryInto;
 #[repr(u8)]
 pub enum Op {
   Constant,
+  Nil,
+  True,
+  False,
   Add,
   Subtract,
   Multiply,
   Divide,
+  Not,
   Negate,
   Return,
 }
@@ -19,13 +23,20 @@ impl TryFrom<u8> for Op {
   fn try_from(v: u8) -> Result<Self, Self::Error> {
     match v {
       x if x == Op::Constant as u8 => Ok(Op::Constant),
-      x if x == Op::Negate as u8 => Ok(Op::Negate),
+      x if x == Op::Nil as u8 => Ok(Op::Nil),
+      x if x == Op::True as u8 => Ok(Op::True),
+      x if x == Op::False as u8 => Ok(Op::False),
       x if x == Op::Add as u8 => Ok(Op::Add),
       x if x == Op::Subtract as u8 => Ok(Op::Subtract),
       x if x == Op::Multiply as u8 => Ok(Op::Multiply),
       x if x == Op::Divide as u8 => Ok(Op::Divide),
+      x if x == Op::Not as u8 => Ok(Op::Not),
+      x if x == Op::Negate as u8 => Ok(Op::Negate),
       x if x == Op::Return as u8 => Ok(Op::Return),
-      _ => Err(v),
+      _ => {
+        eprintln!("New case needed in TryFrom<u8>?");
+        Err(v)
+      }
     }
   }
 }
@@ -36,13 +47,20 @@ impl TryFrom<&u8> for Op {
   fn try_from(v: &u8) -> Result<Self, Self::Error> {
     match *v {
       x if x == Op::Constant as u8 => Ok(Op::Constant),
-      x if x == Op::Negate as u8 => Ok(Op::Negate),
+      x if x == Op::Nil as u8 => Ok(Op::Nil),
+      x if x == Op::True as u8 => Ok(Op::True),
+      x if x == Op::False as u8 => Ok(Op::False),
       x if x == Op::Add as u8 => Ok(Op::Add),
       x if x == Op::Subtract as u8 => Ok(Op::Subtract),
       x if x == Op::Multiply as u8 => Ok(Op::Multiply),
       x if x == Op::Divide as u8 => Ok(Op::Divide),
+      x if x == Op::Not as u8 => Ok(Op::Not),
+      x if x == Op::Negate as u8 => Ok(Op::Negate),
       x if x == Op::Return as u8 => Ok(Op::Return),
-      _ => Err(*v),
+      _ => {
+        eprintln!("New case needed in TryFrom<&u8>?");
+        Err(*v)
+      }
     }
   }
 }
@@ -96,10 +114,14 @@ impl Chunk {
     let instruction = *self.code.get(offset).expect("Expect instruction");
     match instruction.try_into() {
       Ok(Op::Constant) => self.constant_instruction("OP_CONSTANT", offset),
+      Ok(Op::Nil) => self.simple_instruction("OP_NIL", offset),
+      Ok(Op::True) => self.simple_instruction("OP_TRUE", offset),
+      Ok(Op::False) => self.simple_instruction("OP_FALSE", offset),
       Ok(Op::Add) => self.simple_instruction("OP_ADD", offset),
       Ok(Op::Subtract) => self.simple_instruction("OP_SUBTRACT", offset),
       Ok(Op::Multiply) => self.simple_instruction("OP_MULTIPLY", offset),
       Ok(Op::Divide) => self.simple_instruction("OP_DIVIDE", offset),
+      Ok(Op::Not) => self.simple_instruction("OP_NOT", offset),
       Ok(Op::Negate) => self.simple_instruction("OP_NEGATE", offset),
       Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
       Err(v) => {
@@ -120,7 +142,7 @@ impl Chunk {
       .get(offset + 1)
       .expect("Could not get constant index");
     print!("{:16} {:04} '", name, constant);
-    print_value(self.constants[constant as usize]);
+    &self.constants[constant as usize].print();
     println!("'");
     return offset + 2;
   }

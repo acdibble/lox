@@ -25,9 +25,18 @@ impl<'a> VM<'a> {
     }
   }
 
-  // fn reset_stack(&mut self) {
-  //   self.stack_top = 0;
-  // }
+  fn reset_stack(&mut self) {
+    self.stack.clear()
+  }
+
+  fn runtime_error(&mut self, string: &str) {
+    eprintln!("{}", string);
+
+    let instruction = self.ip - 1;
+    let line = self.chunk.unwrap().lines[instruction as usize];
+    eprintln!("[line {}] in script", line);
+    self.reset_stack();
+  }
 
   pub fn interpret(&mut self, source: &String) -> InterpretResult {
     let mut vm = VM::new();
@@ -51,6 +60,13 @@ impl<'a> VM<'a> {
     self.stack.pop().unwrap()
   }
 
+  fn peek(&self, index: usize) -> &Value {
+    match self.stack.len() {
+      0 => panic!(),
+      n => &self.stack.get(n - 1 - index).unwrap(),
+    }
+  }
+
   fn run(&mut self) -> InterpretResult {
     macro_rules! read_byte {
       () => {{
@@ -61,7 +77,7 @@ impl<'a> VM<'a> {
 
     macro_rules! read_constant {
       () => {
-        self.chunk.unwrap().constants[read_byte!() as usize]
+        &self.chunk.unwrap().constants[read_byte!() as usize]
       };
     }
 
@@ -69,7 +85,7 @@ impl<'a> VM<'a> {
       print!("          ");
       for value in self.stack.iter() {
         print!("[ ");
-        print_value(*value);
+        value.print();
         print!(" ]");
       }
       println!("");
@@ -79,36 +95,73 @@ impl<'a> VM<'a> {
       match instruction {
         Ok(Op::Constant) => {
           let constant = read_constant!();
-          self.push(constant);
-          print_value(constant);
+          constant.print();
+          self.push(*constant);
           println!("");
         }
-        Ok(Op::Add) => {
-          let b = self.pop();
-          let a = self.pop();
-          self.push(a + b);
+        Ok(Op::Nil) => self.push(Value::Nil),
+        Ok(Op::True) => self.push(Value::Bool(true)),
+        Ok(Op::False) => self.push(Value::Bool(false)),
+        Ok(Op::Add) => match (self.peek(0), self.peek(1)) {
+          (&Value::Number(b), &Value::Number(a)) => {
+            self.pop();
+            self.pop();
+            self.push(Value::Number(a + b));
+          }
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        },
+        Ok(Op::Subtract) => match (self.peek(0), self.peek(1)) {
+          (&Value::Number(b), &Value::Number(a)) => {
+            self.pop();
+            self.pop();
+            self.push(Value::Number(a - b));
+          }
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        },
+        Ok(Op::Multiply) => match (self.peek(0), self.peek(1)) {
+          (&Value::Number(b), &Value::Number(a)) => {
+            self.pop();
+            self.pop();
+            self.push(Value::Number(a * b));
+          }
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        },
+        Ok(Op::Divide) => match (self.peek(0), self.peek(1)) {
+          (&Value::Number(b), &Value::Number(a)) => {
+            self.pop();
+            self.pop();
+            self.push(Value::Number(a / b));
+          }
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        },
+        Ok(Op::Not) => {
+          let value = self.pop().is_falsy();
+          self.push(Value::Bool(value))
         }
-        Ok(Op::Subtract) => {
-          let b = self.pop();
-          let a = self.pop();
-          self.push(a - b);
-        }
-        Ok(Op::Multiply) => {
-          let b = self.pop();
-          let a = self.pop();
-          self.push(a * b);
-        }
-        Ok(Op::Divide) => {
-          let b = self.pop();
-          let a = self.pop();
-          self.push(a / b);
-        }
-        Ok(Op::Negate) => {
-          let value = self.pop();
-          self.push(-value)
-        }
+        Ok(Op::Negate) => match self.peek(0) {
+          &Value::Number(num) => {
+            self.pop();
+            self.push(Value::Number(-num))
+          }
+          _ => {
+            self.runtime_error("Operand must be a number.");
+            return InterpretResult::RuntimeError;
+          }
+        },
         Ok(Op::Return) => {
-          print_value(self.pop());
+          self.pop().print();
           println!("");
           return InterpretResult::Ok;
         }
