@@ -51,26 +51,7 @@ impl TryFrom<&u8> for Op {
   type Error = u8;
 
   fn try_from(v: &u8) -> Result<Self, Self::Error> {
-    match *v {
-      x if x == Op::Constant as u8 => Ok(Op::Constant),
-      x if x == Op::Nil as u8 => Ok(Op::Nil),
-      x if x == Op::True as u8 => Ok(Op::True),
-      x if x == Op::False as u8 => Ok(Op::False),
-      x if x == Op::Equal as u8 => Ok(Op::Equal),
-      x if x == Op::Greater as u8 => Ok(Op::Greater),
-      x if x == Op::Less as u8 => Ok(Op::Less),
-      x if x == Op::Add as u8 => Ok(Op::Add),
-      x if x == Op::Subtract as u8 => Ok(Op::Subtract),
-      x if x == Op::Multiply as u8 => Ok(Op::Multiply),
-      x if x == Op::Divide as u8 => Ok(Op::Divide),
-      x if x == Op::Not as u8 => Ok(Op::Not),
-      x if x == Op::Negate as u8 => Ok(Op::Negate),
-      x if x == Op::Return as u8 => Ok(Op::Return),
-      _ => {
-        eprintln!("New case needed in TryFrom<&u8>?");
-        Err(*v)
-      }
-    }
+    Self::try_from(*v)
   }
 }
 
