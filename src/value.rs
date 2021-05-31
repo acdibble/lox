@@ -5,6 +5,17 @@ pub enum Value {
   Nil,
 }
 
+impl PartialEq for Value {
+  fn eq(&self, other: &Value) -> bool {
+    match (self, other) {
+      (&Value::Bool(a), &Value::Bool(b)) => a == b,
+      (&Value::Nil, &Value::Nil) => true,
+      (&Value::Number(a), &Value::Number(b)) => a == b,
+      _ => false,
+    }
+  }
+}
+
 impl Value {
   pub fn is_falsy(&self) -> bool {
     match self {

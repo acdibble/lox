@@ -60,6 +60,12 @@ impl<'a> Compiler<'a> {
       TokenKind::Slash => (None, Some(Self::binary), Precedence::Factor),
       TokenKind::Star => (None, Some(Self::binary), Precedence::Factor),
       TokenKind::Bang => (Some(Self::unary), None, Precedence::None),
+      TokenKind::BangEqual => (None, Some(Self::binary), Precedence::Equality),
+      TokenKind::EqualEqual => (None, Some(Self::binary), Precedence::Equality),
+      TokenKind::Greater => (None, Some(Self::binary), Precedence::Comparison),
+      TokenKind::GreaterEqual => (None, Some(Self::binary), Precedence::Comparison),
+      TokenKind::Less => (None, Some(Self::binary), Precedence::Comparison),
+      TokenKind::LessEqual => (None, Some(Self::binary), Precedence::Comparison),
       TokenKind::Number => (Some(Self::number), None, Precedence::None),
       TokenKind::False => (Some(Self::literal), None, Precedence::None),
       TokenKind::True => (Some(Self::literal), None, Precedence::None),
@@ -183,6 +189,12 @@ impl<'a> Compiler<'a> {
     self.parse_precedence(precedence);
 
     match operator_type {
+      TokenKind::BangEqual => self.emit_bytes(Op::Equal as u8, Op::Not as u8),
+      TokenKind::EqualEqual => self.emit_byte(Op::Equal as u8),
+      TokenKind::Greater => self.emit_byte(Op::Greater as u8),
+      TokenKind::GreaterEqual => self.emit_bytes(Op::Less as u8, Op::Not as u8),
+      TokenKind::Less => self.emit_byte(Op::Less as u8),
+      TokenKind::LessEqual => self.emit_bytes(Op::Greater as u8, Op::Not as u8),
       TokenKind::Plus => self.emit_byte(Op::Add as u8),
       TokenKind::Minus => self.emit_byte(Op::Subtract as u8),
       TokenKind::Star => self.emit_byte(Op::Multiply as u8),

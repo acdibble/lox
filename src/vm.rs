@@ -102,6 +102,33 @@ impl<'a> VM<'a> {
         Ok(Op::Nil) => self.push(Value::Nil),
         Ok(Op::True) => self.push(Value::Bool(true)),
         Ok(Op::False) => self.push(Value::Bool(false)),
+        Ok(Op::Equal) => {
+          let b = self.pop();
+          let a = self.pop();
+          self.push(Value::Bool(a == b));
+        }
+        Ok(Op::Greater) => match (self.peek(0), self.peek(1)) {
+          (&Value::Number(b), &Value::Number(a)) => {
+            self.pop();
+            self.pop();
+            self.push(Value::Bool(a > b));
+          }
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        },
+        Ok(Op::Less) => match (self.peek(0), self.peek(1)) {
+          (&Value::Number(b), &Value::Number(a)) => {
+            self.pop();
+            self.pop();
+            self.push(Value::Bool(a < b));
+          }
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        },
         Ok(Op::Add) => match (self.peek(0), self.peek(1)) {
           (&Value::Number(b), &Value::Number(a)) => {
             self.pop();
