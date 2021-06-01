@@ -10,6 +10,7 @@ pub enum InterpretResult {
   RuntimeError,
 }
 
+#[derive(Default)]
 pub struct VM<'a> {
   chunk: Option<&'a Chunk>,
   ip: usize,
@@ -18,11 +19,7 @@ pub struct VM<'a> {
 
 impl<'a> VM<'a> {
   pub fn new() -> VM<'a> {
-    VM {
-      chunk: None,
-      ip: 0,
-      stack: Vec::new(),
-    }
+    VM::default()
   }
 
   fn reset_stack(&mut self) {
@@ -81,6 +78,22 @@ impl<'a> VM<'a> {
       };
     }
 
+    macro_rules! binary_op {
+      ($op: tt, $variant: ident) => {{
+        let value = match (self.peek(1), self.peek(0)) {
+          (Value::Number(b), Value::Number(a)) => (a $op b),
+          _ => {
+            self.runtime_error("Operands must be numbers.");
+            return InterpretResult::RuntimeError;
+          }
+        };
+
+        self.pop();
+        self.pop();
+        self.push(Value::$variant(value))
+      }};
+    }
+
     loop {
       print!("          ");
       for value in self.stack.iter() {
@@ -96,7 +109,7 @@ impl<'a> VM<'a> {
         Ok(Op::Constant) => {
           let constant = read_constant!();
           constant.print();
-          self.push(*constant);
+          self.push(constant.clone());
           println!("");
         }
         Ok(Op::Nil) => self.push(Value::Nil),
@@ -107,72 +120,25 @@ impl<'a> VM<'a> {
           let a = self.pop();
           self.push(Value::Bool(a == b));
         }
-        Ok(Op::Greater) => match (self.peek(0), self.peek(1)) {
-          (&Value::Number(b), &Value::Number(a)) => {
-            self.pop();
-            self.pop();
-            self.push(Value::Bool(a > b));
-          }
-          _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
-          }
-        },
-        Ok(Op::Less) => match (self.peek(0), self.peek(1)) {
-          (&Value::Number(b), &Value::Number(a)) => {
-            self.pop();
-            self.pop();
-            self.push(Value::Bool(a < b));
-          }
-          _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
-          }
-        },
-        Ok(Op::Add) => match (self.peek(0), self.peek(1)) {
-          (&Value::Number(b), &Value::Number(a)) => {
-            self.pop();
-            self.pop();
-            self.push(Value::Number(a + b));
-          }
-          _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
-          }
-        },
-        Ok(Op::Subtract) => match (self.peek(0), self.peek(1)) {
-          (&Value::Number(b), &Value::Number(a)) => {
-            self.pop();
-            self.pop();
-            self.push(Value::Number(a - b));
-          }
-          _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
-          }
-        },
-        Ok(Op::Multiply) => match (self.peek(0), self.peek(1)) {
-          (&Value::Number(b), &Value::Number(a)) => {
-            self.pop();
-            self.pop();
-            self.push(Value::Number(a * b));
-          }
-          _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
-          }
-        },
-        Ok(Op::Divide) => match (self.peek(0), self.peek(1)) {
-          (&Value::Number(b), &Value::Number(a)) => {
-            self.pop();
-            self.pop();
-            self.push(Value::Number(a / b));
-          }
-          _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
-          }
-        },
+        Ok(Op::Greater) => binary_op!(>, Bool),
+        Ok(Op::Less) => binary_op!(<, Bool),
+        Ok(Op::Add) => {
+          let value = match (self.peek(0), self.peek(1)) {
+            (Value::Number(b), Value::Number(a)) => Value::Number(a + b),
+            (Value::String(b), Value::String(a)) => Value::String(a + b),
+            _ => {
+              self.runtime_error("Operands must be numbers.");
+              return InterpretResult::RuntimeError;
+            }
+          };
+
+          self.pop();
+          self.pop();
+          self.push(value);
+        }
+        Ok(Op::Subtract) => binary_op!(-, Number),
+        Ok(Op::Multiply) => binary_op!(*, Number),
+        Ok(Op::Divide) => binary_op!(/, Number),
         Ok(Op::Not) => {
           let value = self.pop().is_falsy();
           self.push(Value::Bool(value))

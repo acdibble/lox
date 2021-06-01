@@ -1,5 +1,6 @@
 use crate::chunk::*;
 use crate::scanner::*;
+use crate::string;
 use crate::value::*;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
@@ -66,6 +67,7 @@ impl<'a> Compiler<'a> {
       TokenKind::GreaterEqual => (None, Some(Self::binary), Precedence::Comparison),
       TokenKind::Less => (None, Some(Self::binary), Precedence::Comparison),
       TokenKind::LessEqual => (None, Some(Self::binary), Precedence::Comparison),
+      TokenKind::String => (Some(Self::string), None, Precedence::None),
       TokenKind::Number => (Some(Self::number), None, Precedence::None),
       TokenKind::False => (Some(Self::literal), None, Precedence::None),
       TokenKind::True => (Some(Self::literal), None, Precedence::None),
@@ -217,6 +219,14 @@ impl<'a> Compiler<'a> {
     self.consume(TokenKind::RightParen, "Expect ')' after expression.")
   }
 
+  fn string(&mut self) {
+    let string = String::from(self.parser.previous.as_ref().unwrap().lexeme);
+
+    self.emit_constant(Value::String(string::Handle::from_str(
+      &string[1..string.len() - 1],
+    )))
+  }
+
   fn number(&mut self) {
     let value: f64 = self
       .parser
@@ -280,7 +290,6 @@ impl<'a> Compiler<'a> {
 }
 
 pub fn compile(source: &String, chunk: &mut Chunk) -> bool {
-  let scanner = Scanner::new(source);
-  let mut compiler = Compiler::new(scanner, chunk);
+  let mut compiler = Compiler::new(Scanner::new(source), chunk);
   compiler.compile()
 }
