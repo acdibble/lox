@@ -1,5 +1,5 @@
 [package]
-name = "shitlang"
+name = "rustlox"
 version = "0.1.0"
 authors = ["Andrew Dibble <andrew.dibble@doctolib.com>"]
 edition = "2018"
