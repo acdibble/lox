@@ -7,7 +7,7 @@ use std::ops;
 pub struct Handle(usize);
 
 impl Handle {
-  fn as_str(&self) -> InternedString {
+  pub fn as_str(&self) -> InternedString {
     with_interner(|interner| unsafe {
       InternedString {
         string: ::std::mem::transmute::<&str, &str>(interner.get(self.0)),

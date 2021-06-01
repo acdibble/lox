@@ -8,6 +8,10 @@ pub enum Op {
   Nil,
   True,
   False,
+  Pop,
+  GetGlobal,
+  DefineGlobal,
+  SetGlobal,
   Equal,
   Greater,
   Less,
@@ -17,6 +21,7 @@ pub enum Op {
   Divide,
   Not,
   Negate,
+  Print,
   Return,
 }
 
@@ -29,6 +34,10 @@ impl TryFrom<u8> for Op {
       x if x == Op::Nil as u8 => Ok(Op::Nil),
       x if x == Op::True as u8 => Ok(Op::True),
       x if x == Op::False as u8 => Ok(Op::False),
+      x if x == Op::Pop as u8 => Ok(Op::Pop),
+      x if x == Op::GetGlobal as u8 => Ok(Op::GetGlobal),
+      x if x == Op::DefineGlobal as u8 => Ok(Op::DefineGlobal),
+      x if x == Op::SetGlobal as u8 => Ok(Op::SetGlobal),
       x if x == Op::Equal as u8 => Ok(Op::Equal),
       x if x == Op::Greater as u8 => Ok(Op::Greater),
       x if x == Op::Less as u8 => Ok(Op::Less),
@@ -38,6 +47,7 @@ impl TryFrom<u8> for Op {
       x if x == Op::Divide as u8 => Ok(Op::Divide),
       x if x == Op::Not as u8 => Ok(Op::Not),
       x if x == Op::Negate as u8 => Ok(Op::Negate),
+      x if x == Op::Print as u8 => Ok(Op::Print),
       x if x == Op::Return as u8 => Ok(Op::Return),
       _ => {
         eprintln!("New case needed in TryFrom<u8>?");
@@ -81,6 +91,10 @@ impl Chunk {
       .try_into()
       .expect("Too many constants");
   }
+}
+
+impl Chunk {
+  #![cfg(feature = "trace-execution")]
 
   pub fn disassemble(&self, name: &'static str) {
     println!("== {} ==", name);
@@ -107,6 +121,10 @@ impl Chunk {
       Ok(Op::Nil) => self.simple_instruction("OP_NIL", offset),
       Ok(Op::True) => self.simple_instruction("OP_TRUE", offset),
       Ok(Op::False) => self.simple_instruction("OP_FALSE", offset),
+      Ok(Op::Pop) => self.simple_instruction("OP_POP", offset),
+      Ok(Op::GetGlobal) => self.constant_instruction("OP_GET_GLOBAL", offset),
+      Ok(Op::DefineGlobal) => self.constant_instruction("OP_DEFINE_GLOBAL", offset),
+      Ok(Op::SetGlobal) => self.constant_instruction("OP_SET_GLOBAL", offset),
       Ok(Op::Equal) => self.simple_instruction("OP_EQUAL", offset),
       Ok(Op::Greater) => self.simple_instruction("OP_GREATER", offset),
       Ok(Op::Less) => self.simple_instruction("OP_LESS", offset),
@@ -116,6 +134,7 @@ impl Chunk {
       Ok(Op::Divide) => self.simple_instruction("OP_DIVIDE", offset),
       Ok(Op::Not) => self.simple_instruction("OP_NOT", offset),
       Ok(Op::Negate) => self.simple_instruction("OP_NEGATE", offset),
+      Ok(Op::Print) => self.simple_instruction("OP_PRINT", offset),
       Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
       Err(v) => {
         println!("Unknown opcode {}", v);

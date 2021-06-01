@@ -1,6 +1,7 @@
 use crate::chunk::*;
 use crate::compiler::*;
 use crate::value::*;
+use std::collections::HashMap;
 use std::convert::TryInto;
 
 #[derive(PartialEq)]
@@ -11,14 +12,15 @@ pub enum InterpretResult {
 }
 
 #[derive(Default)]
-pub struct VM<'a> {
-  chunk: Option<&'a Chunk>,
+pub struct VM {
+  chunk: Option<Chunk>,
   ip: usize,
   stack: Vec<Value>,
+  globals: HashMap<&'static str, Value>,
 }
 
-impl<'a> VM<'a> {
-  pub fn new() -> VM<'a> {
+impl VM {
+  pub fn new() -> VM {
     VM::default()
   }
 
@@ -30,23 +32,24 @@ impl<'a> VM<'a> {
     eprintln!("{}", string);
 
     let instruction = self.ip - 1;
-    let line = self.chunk.unwrap().lines[instruction as usize];
+    let line = self.chunk.as_ref().unwrap().lines[instruction as usize];
     eprintln!("[line {}] in script", line);
     self.reset_stack();
   }
 
   pub fn interpret(&mut self, source: &String) -> InterpretResult {
-    let mut vm = VM::new();
     let mut chunk = Chunk::new();
 
     if !compile(source, &mut chunk) {
       return InterpretResult::CompileError;
     }
 
-    vm.chunk = Some(&chunk);
-    vm.ip = 0;
+    self.chunk = Some(chunk);
+    self.ip = 0;
 
-    return vm.run();
+    let result = self.run();
+    self.chunk = None;
+    result
   }
 
   fn push(&mut self, value: Value) {
@@ -68,14 +71,23 @@ impl<'a> VM<'a> {
     macro_rules! read_byte {
       () => {{
         self.ip += 1;
-        self.chunk.unwrap().code[self.ip - 1]
+        self.chunk.as_ref().unwrap().code[self.ip - 1]
       }};
     }
 
     macro_rules! read_constant {
       () => {
-        &self.chunk.unwrap().constants[read_byte!() as usize]
+        &self.chunk.as_ref().unwrap().constants[read_byte!() as usize]
       };
+    }
+
+    macro_rules! read_string {
+      () => {{
+        match read_constant!() {
+          Value::String(handle) => handle,
+          _ => panic!(),
+        }
+      }};
     }
 
     macro_rules! binary_op {
@@ -95,34 +107,83 @@ impl<'a> VM<'a> {
     }
 
     loop {
-      print!("          ");
-      for value in self.stack.iter() {
-        print!("[ ");
-        value.print();
-        print!(" ]");
-      }
-      println!("");
-      self.chunk.unwrap().disassemble_instruction(self.ip);
-
-      let instruction = read_byte!().try_into();
-      match instruction {
-        Ok(Op::Constant) => {
-          let constant = read_constant!();
-          constant.print();
-          self.push(constant.clone());
-          println!("");
+      {
+        #![cfg(feature = "trace-execution")]
+        print!("          ");
+        for value in self.stack.iter() {
+          print!("[ ");
+          value.print();
+          print!(" ]");
         }
-        Ok(Op::Nil) => self.push(Value::Nil),
-        Ok(Op::True) => self.push(Value::Bool(true)),
-        Ok(Op::False) => self.push(Value::Bool(false)),
-        Ok(Op::Equal) => {
+        println!("");
+        self
+          .chunk
+          .as_ref()
+          .unwrap()
+          .disassemble_instruction(self.ip);
+      }
+
+      let instruction = match read_byte!().try_into() {
+        Ok(op) => op,
+        Err(value) => {
+          println!("Got unexpected instruction: '{}'", value);
+          panic!();
+        }
+      };
+
+      match instruction {
+        Op::Constant => {
+          let constant = read_constant!();
+          {
+            #![cfg(feature = "trace-execution")]
+            constant.println();
+          }
+          let copy = *constant;
+          self.push(copy);
+        }
+        Op::Nil => self.push(Value::Nil),
+        Op::True => self.push(Value::Bool(true)),
+        Op::False => self.push(Value::Bool(false)),
+        Op::Pop => {
+          self.pop();
+        }
+        Op::GetGlobal => {
+          let name = read_string!();
+          match self.globals.get(name.as_str().string) {
+            Some(value) => {
+              let copy = *value;
+              self.push(copy);
+            }
+            _ => {
+              let error = format!("Undefined variable '{}'.", name);
+              self.runtime_error(error.as_str());
+              return InterpretResult::RuntimeError;
+            }
+          }
+        }
+        Op::DefineGlobal => {
+          let name = read_string!();
+          self.globals.insert(name.as_str().string, *self.peek(0));
+          self.pop();
+        }
+        Op::SetGlobal => {
+          let name = read_string!();
+          let string = name.as_str().string;
+          if self.globals.insert(string, *self.peek(0)).is_none() {
+            self.globals.remove(string);
+            let error = format!("Undefined variable '{}'.", string);
+            self.runtime_error(error.as_str());
+            return InterpretResult::RuntimeError;
+          }
+        }
+        Op::Equal => {
           let b = self.pop();
           let a = self.pop();
           self.push(Value::Bool(a == b));
         }
-        Ok(Op::Greater) => binary_op!(>, Bool),
-        Ok(Op::Less) => binary_op!(<, Bool),
-        Ok(Op::Add) => {
+        Op::Greater => binary_op!(>, Bool),
+        Op::Less => binary_op!(<, Bool),
+        Op::Add => {
           let value = match (self.peek(0), self.peek(1)) {
             (Value::Number(b), Value::Number(a)) => Value::Number(a + b),
             (Value::String(b), Value::String(a)) => Value::String(a + b),
@@ -136,14 +197,14 @@ impl<'a> VM<'a> {
           self.pop();
           self.push(value);
         }
-        Ok(Op::Subtract) => binary_op!(-, Number),
-        Ok(Op::Multiply) => binary_op!(*, Number),
-        Ok(Op::Divide) => binary_op!(/, Number),
-        Ok(Op::Not) => {
+        Op::Subtract => binary_op!(-, Number),
+        Op::Multiply => binary_op!(*, Number),
+        Op::Divide => binary_op!(/, Number),
+        Op::Not => {
           let value = self.pop().is_falsy();
           self.push(Value::Bool(value))
         }
-        Ok(Op::Negate) => match self.peek(0) {
+        Op::Negate => match self.peek(0) {
           &Value::Number(num) => {
             self.pop();
             self.push(Value::Number(-num))
@@ -153,14 +214,11 @@ impl<'a> VM<'a> {
             return InterpretResult::RuntimeError;
           }
         },
-        Ok(Op::Return) => {
-          self.pop().print();
-          println!("");
-          return InterpretResult::Ok;
+        Op::Print => {
+          self.pop().println();
         }
-        Err(value) => {
-          println!("Got unexpected instruction: '{}'", value);
-          panic!();
+        Op::Return => {
+          return InterpretResult::Ok;
         }
       }
     }

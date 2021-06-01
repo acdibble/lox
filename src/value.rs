@@ -1,6 +1,6 @@
 use crate::string;
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Value {
   Bool(bool),
   Number(f64),
@@ -35,5 +35,10 @@ impl Value {
       Value::String(value) => print!("{}", value),
       Value::Nil => print!("nil"),
     }
+  }
+
+  pub fn println(&self) {
+    self.print();
+    println!("");
   }
 }
