@@ -42,7 +42,7 @@ impl VM {
     eprintln!("{}", string);
 
     let instruction = self.ip - 1;
-    let line = self.chunk()?.lines[instruction as usize];
+    let line = self.chunk()?.lines[instruction];
     eprintln!("[line {}] in script", line);
     self.reset_stack();
     Err(InterpretError::RuntimeError)
@@ -80,9 +80,9 @@ impl VM {
     }
   }
 
-  fn read_byte(&mut self) -> Result<u8> {
+  fn read_u8(&mut self) -> Result<u8> {
+    let ip = self.ip;
     self.ip += 1;
-    let ip = self.ip - 1;
     let chunk = self.chunk()?;
     match chunk.code.get(ip) {
       Some(byte) => Ok(*byte),
@@ -91,11 +91,17 @@ impl VM {
   }
 
   fn read_constant(&mut self) -> Result<&Value> {
-    let constant = self.read_byte()? as usize;
+    let constant: usize = self.read_u8()?.into();
     match self.chunk()?.constants.get(constant) {
       Some(value) => Ok(value),
       _ => return Err(InterpretError::InternalError("Failed to read constant.")),
     }
+  }
+
+  fn read_u16(&mut self) -> Result<u16> {
+    let byte1: u16 = self.read_u8()?.into();
+    let byte2: u16 = self.read_u8()?.into();
+    Ok((byte1 << 8) | byte2)
   }
 
   fn read_string(&mut self) -> Result<&string::Handle> {
@@ -135,7 +141,7 @@ impl VM {
         self.chunk()?.disassemble_instruction(ip);
       }
 
-      let instruction = match self.read_byte()?.try_into() {
+      let instruction = match self.read_u8()?.try_into() {
         Ok(op) => op,
         Err(value) => {
           let message = format!("Got unexpected instruction: '{}'", value);
@@ -160,12 +166,12 @@ impl VM {
           self.pop()?;
         }
         Op::GetLocal => {
-          let slot = self.read_byte()?;
-          self.push(self.stack[slot as usize]);
+          let slot: usize = self.read_u8()?.into();
+          self.push(self.stack[slot]);
         }
         Op::SetLocal => {
-          let slot = self.read_byte()?;
-          self.stack[slot as usize] = *self.peek(0)?;
+          let slot: usize = self.read_u8()?.into();
+          self.stack[slot] = *self.peek(0)?;
         }
         Op::GetGlobal => {
           let name = self.read_string()?.as_str().string;
@@ -233,6 +239,16 @@ impl VM {
         }
         Op::Print => {
           self.pop()?.println();
+        }
+        Op::Jump => {
+          let offset: usize = self.read_u16()?.into();
+          self.ip += offset;
+        }
+        Op::JumpIfFalse => {
+          let offset: usize = self.read_u16()?.into();
+          if self.peek(0)?.is_falsy() {
+            self.ip += offset
+          }
         }
         Op::Return => {
           return Ok(());

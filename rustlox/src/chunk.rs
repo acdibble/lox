@@ -25,6 +25,8 @@ pub enum Op {
   Not,
   Negate,
   Print,
+  Jump,
+  JumpIfFalse,
   Return,
 }
 
@@ -53,6 +55,8 @@ impl TryFrom<u8> for Op {
       x if x == Op::Not as u8 => Ok(Op::Not),
       x if x == Op::Negate as u8 => Ok(Op::Negate),
       x if x == Op::Print as u8 => Ok(Op::Print),
+      x if x == Op::Jump as u8 => Ok(Op::Jump),
+      x if x == Op::JumpIfFalse as u8 => Ok(Op::JumpIfFalse),
       x if x == Op::Return as u8 => Ok(Op::Return),
       _ => {
         eprintln!("New case needed in TryFrom<u8>?");
@@ -145,6 +149,8 @@ impl Chunk {
       Ok(Op::Not) => self.simple_instruction("OP_NOT", offset),
       Ok(Op::Negate) => self.simple_instruction("OP_NEGATE", offset),
       Ok(Op::Print) => self.simple_instruction("OP_PRINT", offset),
+      Ok(Op::Jump) => self.jump_instruction("OP_JUMP", 1, offset),
+      Ok(Op::JumpIfFalse) => self.jump_instruction("OP_JUMP_IF_FALSE", 1, offset),
       Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
       Err(v) => {
         println!("Unknown opcode {}", v);
@@ -173,5 +179,17 @@ impl Chunk {
     let slot = self.code[offset + 1];
     println!("{:16} {:4}", name, slot);
     return offset + 2;
+  }
+
+  fn jump_instruction(&self, name: &'static str, sign: i32, offset: usize) -> usize {
+    let mut jump: u16 = (self.code[offset + 1] as u16) << 8;
+    jump |= self.code[offset + 2] as u16;
+    println!(
+      "{:16} {:4} -> {}",
+      name,
+      offset,
+      offset as i32 + 3 + sign as i32 * jump as i32
+    );
+    return offset + 3;
   }
 }

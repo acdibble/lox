@@ -1,12 +1,5 @@
-{
-  var a = 1;
-  {
-    var b = 2;
-    {
-      var c = a + b;
-      {
-        print c;
-      }
-    }
-  }
+if (false) {
+  print true;
+} else {
+  print false;
 }

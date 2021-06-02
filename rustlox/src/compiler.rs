@@ -2,6 +2,7 @@ use crate::chunk::*;
 use crate::scanner::*;
 use crate::string;
 use crate::value::*;
+use std::convert::TryInto;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
 #[repr(u8)]
@@ -193,6 +194,13 @@ impl<'a> Compiler<'a> {
     self.emit_byte(byte2);
   }
 
+  fn emit_jump(&mut self, instruction: Op) -> usize {
+    self.emit_byte(instruction as u8);
+    self.emit_byte(0xff);
+    self.emit_byte(0xff);
+    return self.chunk.code.len() - 2;
+  }
+
   fn emit_return(&mut self) {
     self.emit_byte(Op::Return as u8);
   }
@@ -210,6 +218,19 @@ impl<'a> Compiler<'a> {
   fn emit_constant(&mut self, value: Value) {
     let constant = self.make_constant(value);
     self.emit_bytes(Op::Constant as u8, constant);
+  }
+
+  fn patch_jump(&mut self, offset: usize) {
+    let jump: u16 = match (self.chunk.code.len() - offset - 2).try_into() {
+      Ok(value) => value,
+      Err(_) => {
+        self.error("Too much code to jump over.");
+        0
+      }
+    };
+
+    self.chunk.code[offset] = ((jump >> 8) & 0xff) as u8;
+    self.chunk.code[offset + 1] = (jump & 0xff) as u8;
   }
 
   fn binary(&mut self, _can_assign: bool) {
@@ -441,6 +462,25 @@ impl<'a> Compiler<'a> {
     self.emit_byte(Op::Pop as u8)
   }
 
+  fn if_statement(&mut self) {
+    self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.");
+    self.expression();
+    self.consume(TokenKind::RightParen, "Expect ')' after condition.");
+
+    let then_jump = self.emit_jump(Op::JumpIfFalse);
+    self.emit_byte(Op::Pop as u8);
+    self.statement();
+
+    let else_jump = self.emit_jump(Op::Jump);
+    self.patch_jump(then_jump);
+    self.emit_byte(Op::Pop as u8);
+
+    if self.match_current(TokenKind::Else) {
+      self.statement();
+    }
+    self.patch_jump(else_jump);
+  }
+
   fn print_statement(&mut self) {
     self.expression();
     self.consume(TokenKind::Semicolon, "Expect ';' after value.");
@@ -481,6 +521,8 @@ impl<'a> Compiler<'a> {
   fn statement(&mut self) {
     if self.match_current(TokenKind::Print) {
       self.print_statement();
+    } else if self.match_current(TokenKind::If) {
+      self.if_statement();
     } else if self.match_current(TokenKind::LeftBrace) {
       self.begin_scope();
       self.block();
