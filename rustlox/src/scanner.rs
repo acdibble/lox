@@ -50,6 +50,7 @@ pub enum TokenKind {
   EOF,
 }
 
+#[derive(Copy, Clone)]
 pub struct Token<'a> {
   pub kind: TokenKind,
   pub line: i32,

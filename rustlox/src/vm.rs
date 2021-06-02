@@ -159,6 +159,14 @@ impl VM {
         Op::Pop => {
           self.pop()?;
         }
+        Op::GetLocal => {
+          let slot = self.read_byte()?;
+          self.push(self.stack[slot as usize]);
+        }
+        Op::SetLocal => {
+          let slot = self.read_byte()?;
+          self.stack[slot as usize] = *self.peek(0)?;
+        }
         Op::GetGlobal => {
           let name = self.read_string()?.as_str().string;
           match self.globals.get(name) {

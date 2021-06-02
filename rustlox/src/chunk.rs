@@ -1,6 +1,7 @@
 use crate::value::*;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::result::Result;
 
 #[repr(u8)]
 pub enum Op {
@@ -9,6 +10,8 @@ pub enum Op {
   True,
   False,
   Pop,
+  GetLocal,
+  SetLocal,
   GetGlobal,
   DefineGlobal,
   SetGlobal,
@@ -35,6 +38,8 @@ impl TryFrom<u8> for Op {
       x if x == Op::True as u8 => Ok(Op::True),
       x if x == Op::False as u8 => Ok(Op::False),
       x if x == Op::Pop as u8 => Ok(Op::Pop),
+      x if x == Op::GetLocal as u8 => Ok(Op::GetLocal),
+      x if x == Op::SetLocal as u8 => Ok(Op::SetLocal),
       x if x == Op::GetGlobal as u8 => Ok(Op::GetGlobal),
       x if x == Op::DefineGlobal as u8 => Ok(Op::DefineGlobal),
       x if x == Op::SetGlobal as u8 => Ok(Op::SetGlobal),
@@ -85,11 +90,14 @@ impl Chunk {
     self.lines.push(line);
   }
 
-  pub fn add_constant(&mut self, value: Value) -> u8 {
-    self.constants.push(value);
-    return (self.constants.len() - 1)
-      .try_into()
-      .expect("Too many constants");
+  pub fn add_constant(&mut self, value: Value) -> Result<u8, ()> {
+    match self.constants.len().try_into() {
+      Err(_) => Err(()),
+      Ok(index) => {
+        self.constants.push(value);
+        Ok(index)
+      }
+    }
   }
 }
 
@@ -122,6 +130,8 @@ impl Chunk {
       Ok(Op::True) => self.simple_instruction("OP_TRUE", offset),
       Ok(Op::False) => self.simple_instruction("OP_FALSE", offset),
       Ok(Op::Pop) => self.simple_instruction("OP_POP", offset),
+      Ok(Op::GetLocal) => self.byte_instruction("OP_GET_LOCAL", offset),
+      Ok(Op::SetLocal) => self.byte_instruction("OP_SET_LOCAL", offset),
       Ok(Op::GetGlobal) => self.constant_instruction("OP_GET_GLOBAL", offset),
       Ok(Op::DefineGlobal) => self.constant_instruction("OP_DEFINE_GLOBAL", offset),
       Ok(Op::SetGlobal) => self.constant_instruction("OP_SET_GLOBAL", offset),
@@ -156,6 +166,12 @@ impl Chunk {
     print!("{:16} {:04} '", name, constant);
     &self.constants[constant as usize].print();
     println!("'");
+    return offset + 2;
+  }
+
+  fn byte_instruction(&self, name: &'static str, offset: usize) -> usize {
+    let slot = self.code[offset + 1];
+    println!("{:16} {:4}", name, slot);
     return offset + 2;
   }
 }
