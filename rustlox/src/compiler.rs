@@ -453,14 +453,14 @@ impl<'a> Compiler<'a> {
         return;
       }
       match self.current_kind() {
-        TokenKind::EOF => return,
-        TokenKind::Fun => return,
-        TokenKind::Var => return,
-        TokenKind::For => return,
-        TokenKind::If => return,
-        TokenKind::While => return,
-        TokenKind::Print => return,
-        TokenKind::Return => return,
+        TokenKind::EOF
+        | TokenKind::Fun
+        | TokenKind::Var
+        | TokenKind::For
+        | TokenKind::If
+        | TokenKind::While
+        | TokenKind::Print
+        | TokenKind::Return => return,
         _ => self.advance(),
       }
     }
