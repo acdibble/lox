@@ -84,9 +84,11 @@ impl<'a> Compiler<'a> {
       TokenKind::Identifier => (Some(Self::variable), None, Precedence::None),
       TokenKind::String => (Some(Self::string), None, Precedence::None),
       TokenKind::Number => (Some(Self::number), None, Precedence::None),
+      TokenKind::And => (None, Some(Self::and), Precedence::And),
       TokenKind::False => (Some(Self::literal), None, Precedence::None),
       TokenKind::True => (Some(Self::literal), None, Precedence::None),
       TokenKind::Nil => (Some(Self::literal), None, Precedence::None),
+      TokenKind::Or => (None, Some(Self::or), Precedence::Or),
       _ => (None, None, Precedence::None),
     }
   }
@@ -189,20 +191,24 @@ impl<'a> Compiler<'a> {
       .write(byte, self.parser.previous.as_ref().unwrap().line);
   }
 
+  fn emit_op(&mut self, op: Op) {
+    self.emit_byte(op as u8)
+  }
+
   fn emit_bytes(&mut self, byte1: u8, byte2: u8) {
     self.emit_byte(byte1);
     self.emit_byte(byte2);
   }
 
   fn emit_jump(&mut self, instruction: Op) -> usize {
-    self.emit_byte(instruction as u8);
+    self.emit_op(instruction);
     self.emit_byte(0xff);
     self.emit_byte(0xff);
     return self.chunk.code.len() - 2;
   }
 
   fn emit_return(&mut self) {
-    self.emit_byte(Op::Return as u8);
+    self.emit_op(Op::Return);
   }
 
   fn make_constant(&mut self, value: Value) -> u8 {
@@ -241,24 +247,24 @@ impl<'a> Compiler<'a> {
 
     match operator_type {
       TokenKind::BangEqual => self.emit_bytes(Op::Equal as u8, Op::Not as u8),
-      TokenKind::EqualEqual => self.emit_byte(Op::Equal as u8),
-      TokenKind::Greater => self.emit_byte(Op::Greater as u8),
+      TokenKind::EqualEqual => self.emit_op(Op::Equal),
+      TokenKind::Greater => self.emit_op(Op::Greater),
       TokenKind::GreaterEqual => self.emit_bytes(Op::Less as u8, Op::Not as u8),
-      TokenKind::Less => self.emit_byte(Op::Less as u8),
+      TokenKind::Less => self.emit_op(Op::Less),
       TokenKind::LessEqual => self.emit_bytes(Op::Greater as u8, Op::Not as u8),
-      TokenKind::Plus => self.emit_byte(Op::Add as u8),
-      TokenKind::Minus => self.emit_byte(Op::Subtract as u8),
-      TokenKind::Star => self.emit_byte(Op::Multiply as u8),
-      TokenKind::Slash => self.emit_byte(Op::Divide as u8),
+      TokenKind::Plus => self.emit_op(Op::Add),
+      TokenKind::Minus => self.emit_op(Op::Subtract),
+      TokenKind::Star => self.emit_op(Op::Multiply),
+      TokenKind::Slash => self.emit_op(Op::Divide),
       _ => unreachable!(),
     }
   }
 
   fn literal(&mut self, _can_assign: bool) {
     match self.previous_kind() {
-      TokenKind::False => self.emit_byte(Op::False as u8),
-      TokenKind::Nil => self.emit_byte(Op::Nil as u8),
-      TokenKind::True => self.emit_byte(Op::True as u8),
+      TokenKind::False => self.emit_op(Op::False),
+      TokenKind::Nil => self.emit_op(Op::Nil),
+      TokenKind::True => self.emit_op(Op::True),
       _ => (),
     }
   }
@@ -318,14 +324,25 @@ impl<'a> Compiler<'a> {
     self.emit_constant(Value::Number(value));
   }
 
+  fn or(&mut self, _can_assign: bool) {
+    let else_jump = self.emit_jump(Op::JumpIfFalse);
+    let end_jump = self.emit_jump(Op::Jump);
+
+    self.patch_jump(else_jump);
+    self.emit_op(Op::Pop);
+
+    self.parse_precedence(Precedence::Or);
+    self.patch_jump(end_jump);
+  }
+
   fn unary(&mut self, _can_assign: bool) {
     let operator_type = self.previous_kind();
 
     self.parse_precedence(Precedence::Unary);
 
     match operator_type {
-      TokenKind::Minus => self.emit_byte(Op::Negate as u8),
-      TokenKind::Bang => self.emit_byte(Op::Not as u8),
+      TokenKind::Minus => self.emit_op(Op::Negate),
+      TokenKind::Bang => self.emit_op(Op::Not),
       _ => unreachable!(),
     }
   }
@@ -428,6 +445,15 @@ impl<'a> Compiler<'a> {
     self.emit_bytes(Op::DefineGlobal as u8, global)
   }
 
+  fn and(&mut self, _can_assign: bool) {
+    let end_jump = self.emit_jump(Op::JumpIfFalse);
+
+    self.emit_op(Op::Pop);
+    self.parse_precedence(Precedence::And);
+
+    self.patch_jump(end_jump);
+  }
+
   fn expression(&mut self) {
     self.parse_precedence(Precedence::Assignment);
   }
@@ -446,7 +472,7 @@ impl<'a> Compiler<'a> {
     if self.match_current(TokenKind::Equal) {
       self.expression();
     } else {
-      self.emit_byte(Op::Nil as u8);
+      self.emit_op(Op::Nil);
     }
 
     self.consume(
@@ -459,7 +485,7 @@ impl<'a> Compiler<'a> {
   fn expression_statement(&mut self) {
     self.expression();
     self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
-    self.emit_byte(Op::Pop as u8)
+    self.emit_op(Op::Pop)
   }
 
   fn if_statement(&mut self) {
@@ -468,12 +494,12 @@ impl<'a> Compiler<'a> {
     self.consume(TokenKind::RightParen, "Expect ')' after condition.");
 
     let then_jump = self.emit_jump(Op::JumpIfFalse);
-    self.emit_byte(Op::Pop as u8);
+    self.emit_op(Op::Pop);
     self.statement();
 
     let else_jump = self.emit_jump(Op::Jump);
     self.patch_jump(then_jump);
-    self.emit_byte(Op::Pop as u8);
+    self.emit_op(Op::Pop);
 
     if self.match_current(TokenKind::Else) {
       self.statement();
@@ -484,7 +510,7 @@ impl<'a> Compiler<'a> {
   fn print_statement(&mut self) {
     self.expression();
     self.consume(TokenKind::Semicolon, "Expect ';' after value.");
-    self.emit_byte(Op::Print as u8)
+    self.emit_op(Op::Print)
   }
 
   fn synchronize(&mut self) {
@@ -551,7 +577,7 @@ impl<'a> Compiler<'a> {
 
     while let Some(local) = self.locals.last() {
       if local.depth.unwrap() > self.scope_depth {
-        self.emit_byte(Op::Pop as u8);
+        self.emit_op(Op::Pop);
         self.locals.pop();
       } else {
         break;
