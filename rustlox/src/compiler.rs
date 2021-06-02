@@ -36,6 +36,11 @@ impl Precedence {
   }
 }
 
+enum ErrorLocation {
+  Current,
+  Previous,
+}
+
 type ParseFn<'a> = fn(&mut Compiler<'a>, bool);
 type ParseRule<'a> = (Option<ParseFn<'a>>, Option<ParseFn<'a>>, Precedence);
 
@@ -98,37 +103,36 @@ impl<'a> Compiler<'a> {
     self.parser.previous.as_ref().unwrap().kind
   }
 
-  fn error_at(&mut self, line: i32, kind: TokenKind, message: &str) {
+  fn error_at(&mut self, location: ErrorLocation, message: &str) {
     if self.parser.panic_mode {
       return;
     }
-    self.parser.panic_mode = true;
-    eprint!("[line {}] Error", line);
 
-    if kind == TokenKind::EOF {
+    let token = match location {
+      ErrorLocation::Current => self.parser.current.as_ref().unwrap(),
+      ErrorLocation::Previous => self.parser.previous.as_ref().unwrap(),
+    };
+
+    eprint!("[line {}] Error", token.line);
+
+    if token.kind == TokenKind::EOF {
       eprint!(" at end");
-    } else if kind != TokenKind::Error {
-      eprint!(" at '{}'", message);
+    } else if token.kind != TokenKind::Error {
+      eprint!(" at '{}'", token.lexeme);
     }
 
     eprintln!(": {}", message);
+    drop(token);
+    self.parser.panic_mode = true;
     self.parser.had_error = true;
   }
 
   fn error_at_current(&mut self, message: &str) {
-    self.error_at(
-      self.parser.current.as_ref().unwrap().line,
-      self.current_kind(),
-      message,
-    )
+    self.error_at(ErrorLocation::Current, message)
   }
 
   fn error(&mut self, message: &str) {
-    self.error_at(
-      self.parser.previous.as_ref().unwrap().line,
-      self.previous_kind(),
-      message,
-    )
+    self.error_at(ErrorLocation::Previous, message)
   }
 
   fn advance(&mut self) {

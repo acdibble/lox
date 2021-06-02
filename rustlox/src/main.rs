@@ -15,10 +15,14 @@ fn repl(vm: &mut VM) {
     loop {
         print!("> ");
         io::stdout().flush().expect("Couldn't flush stdout");
-        match lines.next() {
+        let result = match lines.next() {
             Some(Ok(line)) => vm.interpret(&line),
             _ => break,
         };
+
+        if let Err(InterpretError::InternalError(message)) = result {
+            eprintln!("{}", message);
+        }
     }
 }
 
@@ -27,13 +31,15 @@ fn run_file(vm: &mut VM, path: &String) {
 
     let source = fs::read_to_string(path).expect("Failed to read filed");
     let temp = &source;
-    let result = vm.interpret(temp);
 
-    if result == InterpretResult::CompileError {
-        std::process::exit(65);
-    }
-    if result == InterpretResult::RuntimeError {
-        std::process::exit(70);
+    match vm.interpret(temp) {
+        Err(InterpretError::CompileError) => std::process::exit(65),
+        Err(InterpretError::RuntimeError) => std::process::exit(70),
+        Err(InterpretError::InternalError(message)) => {
+            eprintln!("Fatal error: {}", message);
+            std::process::exit(1)
+        }
+        Ok(()) => (),
     }
 }
 

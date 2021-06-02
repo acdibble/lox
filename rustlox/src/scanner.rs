@@ -67,7 +67,7 @@ impl<'a> Scanner<'a> {
   pub fn new(source: &'a String) -> Scanner<'a> {
     Scanner {
       source,
-      lines: 0,
+      lines: 1,
       start: 0,
       iter: source.chars().enumerate().peekable(),
     }
@@ -78,10 +78,7 @@ impl<'a> Scanner<'a> {
   }
 
   fn match_current(&mut self, expected: char) -> bool {
-    match self.iter.next_if(|&(_, c)| c == expected) {
-      Some(_) => true,
-      None => false,
-    }
+    self.iter.next_if(|&(_, c)| c == expected).is_some()
   }
 
   fn skip_whitespace(&mut self) {
@@ -182,7 +179,7 @@ impl<'a> Scanner<'a> {
   fn identifier(&mut self) -> Token<'a> {
     while self
       .iter
-      .next_if(|&(_, c)| c.is_ascii_alphabetic() || c == '_')
+      .next_if(|&(_, c)| c.is_ascii_alphanumeric() || c == '_')
       .is_some()
     {}
 

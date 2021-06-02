@@ -1,14 +1,15 @@
 use crate::chunk::*;
 use crate::compiler::*;
+use crate::string;
 use crate::value::*;
 use std::collections::HashMap;
 use std::convert::TryInto;
 
 #[derive(PartialEq)]
-pub enum InterpretResult {
-  Ok,
+pub enum InterpretError {
   CompileError,
   RuntimeError,
+  InternalError(&'static str),
 }
 
 #[derive(Default)]
@@ -19,6 +20,8 @@ pub struct VM {
   globals: HashMap<&'static str, Value>,
 }
 
+type Result<T> = std::result::Result<T, InterpretError>;
+
 impl VM {
   pub fn new() -> VM {
     VM::default()
@@ -28,80 +31,92 @@ impl VM {
     self.stack.clear()
   }
 
-  fn runtime_error(&mut self, string: &str) {
+  fn chunk(&mut self) -> Result<&Chunk> {
+    match self.chunk.as_ref() {
+      Some(value) => Ok(value),
+      _ => Err(InterpretError::InternalError("No chunk!")),
+    }
+  }
+
+  fn runtime_error<'a>(&mut self, string: &'a str) -> Result<()> {
     eprintln!("{}", string);
 
     let instruction = self.ip - 1;
-    let line = self.chunk.as_ref().unwrap().lines[instruction as usize];
+    let line = self.chunk()?.lines[instruction as usize];
     eprintln!("[line {}] in script", line);
     self.reset_stack();
+    Err(InterpretError::RuntimeError)
   }
 
-  pub fn interpret(&mut self, source: &String) -> InterpretResult {
+  pub fn interpret(&mut self, source: &String) -> Result<()> {
     let mut chunk = Chunk::new();
 
     if !compile(source, &mut chunk) {
-      return InterpretResult::CompileError;
+      return Err(InterpretError::CompileError);
     }
 
     self.chunk = Some(chunk);
     self.ip = 0;
 
-    let result = self.run();
-    self.chunk = None;
-    result
+    self.run()
   }
 
   fn push(&mut self, value: Value) {
     self.stack.push(value)
   }
 
-  fn pop(&mut self) -> Value {
-    self.stack.pop().unwrap()
-  }
-
-  fn peek(&self, index: usize) -> &Value {
-    match self.stack.len() {
-      0 => panic!(),
-      n => &self.stack.get(n - 1 - index).unwrap(),
+  fn pop(&mut self) -> Result<Value> {
+    match self.stack.pop() {
+      Some(value) => Ok(value),
+      _ => Err(InterpretError::InternalError("Can't pop on empty stack.")),
     }
   }
 
-  fn run(&mut self) -> InterpretResult {
-    macro_rules! read_byte {
-      () => {{
-        self.ip += 1;
-        self.chunk.as_ref().unwrap().code[self.ip - 1]
-      }};
+  fn peek(&self, index: usize) -> Result<&Value> {
+    let len = self.stack.len();
+    match self.stack.get(len - 1 - index) {
+      Some(value) => Ok(value),
+      None => Err(InterpretError::InternalError("Can't peek on empty stack.")),
     }
+  }
 
-    macro_rules! read_constant {
-      () => {
-        &self.chunk.as_ref().unwrap().constants[read_byte!() as usize]
-      };
+  fn read_byte(&mut self) -> Result<u8> {
+    self.ip += 1;
+    let ip = self.ip - 1;
+    let chunk = self.chunk()?;
+    match chunk.code.get(ip) {
+      Some(byte) => Ok(*byte),
+      _ => return Err(InterpretError::InternalError("Failed to read byte.")),
     }
+  }
 
-    macro_rules! read_string {
-      () => {{
-        match read_constant!() {
-          Value::String(handle) => handle,
-          _ => panic!(),
-        }
-      }};
+  fn read_constant(&mut self) -> Result<&Value> {
+    let constant = self.read_byte()? as usize;
+    match self.chunk()?.constants.get(constant) {
+      Some(value) => Ok(value),
+      _ => return Err(InterpretError::InternalError("Failed to read constant.")),
     }
+  }
 
+  fn read_string(&mut self) -> Result<&string::Handle> {
+    match self.read_constant()? {
+      Value::String(handle) => Ok(handle),
+      _ => return Err(InterpretError::InternalError("Value was not a string.")),
+    }
+  }
+
+  fn run(&mut self) -> Result<()> {
     macro_rules! binary_op {
       ($op: tt, $variant: ident) => {{
-        let value = match (self.peek(1), self.peek(0)) {
+        let value = match (self.peek(1)?, self.peek(0)?) {
           (Value::Number(b), Value::Number(a)) => (a $op b),
           _ => {
-            self.runtime_error("Operands must be numbers.");
-            return InterpretResult::RuntimeError;
+            return self.runtime_error("Operands must be numbers.");
           }
         };
 
-        self.pop();
-        self.pop();
+        self.pop()?;
+        self.pop()?;
         self.push(Value::$variant(value))
       }};
     }
@@ -116,24 +131,21 @@ impl VM {
           print!(" ]");
         }
         println!("");
-        self
-          .chunk
-          .as_ref()
-          .unwrap()
-          .disassemble_instruction(self.ip);
+        let ip = self.ip;
+        self.chunk()?.disassemble_instruction(ip);
       }
 
-      let instruction = match read_byte!().try_into() {
+      let instruction = match self.read_byte()?.try_into() {
         Ok(op) => op,
         Err(value) => {
-          println!("Got unexpected instruction: '{}'", value);
-          panic!();
+          let message = format!("Got unexpected instruction: '{}'", value);
+          return self.runtime_error(message.as_str());
         }
       };
 
       match instruction {
         Op::Constant => {
-          let constant = read_constant!();
+          let constant = self.read_constant()?;
           {
             #![cfg(feature = "trace-execution")]
             constant.println();
@@ -145,35 +157,33 @@ impl VM {
         Op::True => self.push(Value::Bool(true)),
         Op::False => self.push(Value::Bool(false)),
         Op::Pop => {
-          self.pop();
+          self.pop()?;
         }
         Op::GetGlobal => {
-          let name = read_string!();
-          match self.globals.get(name.as_str().string) {
+          let name = self.read_string()?.as_str().string;
+          match self.globals.get(name) {
             Some(value) => {
               let copy = *value;
               self.push(copy);
             }
             _ => {
               let error = format!("Undefined variable '{}'.", name);
-              self.runtime_error(error.as_str());
-              return InterpretResult::RuntimeError;
+              return self.runtime_error(error.as_str());
             }
           }
         }
         Op::DefineGlobal => {
-          let name = read_string!();
-          self.globals.insert(name.as_str().string, *self.peek(0));
-          self.pop();
+          let name = self.read_string()?.as_str().string;
+          self.globals.insert(name, *self.peek(0)?);
+          self.pop()?;
         }
         Op::SetGlobal => {
-          let name = read_string!();
+          let name = self.read_string()?;
           let string = name.as_str().string;
-          if self.globals.insert(string, *self.peek(0)).is_none() {
+          if self.globals.insert(string, *self.peek(0)?).is_none() {
             self.globals.remove(string);
             let error = format!("Undefined variable '{}'.", string);
-            self.runtime_error(error.as_str());
-            return InterpretResult::RuntimeError;
+            return self.runtime_error(error.as_str());
           }
         }
         Op::Equal => {
@@ -184,41 +194,40 @@ impl VM {
         Op::Greater => binary_op!(>, Bool),
         Op::Less => binary_op!(<, Bool),
         Op::Add => {
-          let value = match (self.peek(0), self.peek(1)) {
+          let value = match (self.peek(0)?, self.peek(1)?) {
             (Value::Number(b), Value::Number(a)) => Value::Number(a + b),
             (Value::String(b), Value::String(a)) => Value::String(a + b),
             _ => {
-              self.runtime_error("Operands must be numbers.");
-              return InterpretResult::RuntimeError;
+              return self.runtime_error("Operands must be numbers.");
             }
           };
 
-          self.pop();
-          self.pop();
+          self.pop()?;
+          self.pop()?;
           self.push(value);
         }
         Op::Subtract => binary_op!(-, Number),
         Op::Multiply => binary_op!(*, Number),
         Op::Divide => binary_op!(/, Number),
         Op::Not => {
-          let value = self.pop().is_falsy();
+          let value = self.pop()?.is_falsy();
           self.push(Value::Bool(value))
         }
-        Op::Negate => match self.peek(0) {
-          &Value::Number(num) => {
-            self.pop();
-            self.push(Value::Number(-num))
-          }
-          _ => {
-            self.runtime_error("Operand must be a number.");
-            return InterpretResult::RuntimeError;
-          }
-        },
+        Op::Negate => {
+          let num = match self.peek(0)? {
+            Value::Number(num) => *num,
+            _ => {
+              return self.runtime_error("Operand must be a number.");
+            }
+          };
+          self.pop()?;
+          self.push(Value::Number(-num))
+        }
         Op::Print => {
-          self.pop().println();
+          self.pop()?.println();
         }
         Op::Return => {
-          return InterpretResult::Ok;
+          return Ok(());
         }
       }
     }
