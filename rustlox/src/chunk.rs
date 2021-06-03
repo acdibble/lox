@@ -27,6 +27,7 @@ pub enum Op {
     Print,
     Jump,
     JumpIfFalse,
+    Loop,
     Return,
 }
 
@@ -57,6 +58,7 @@ impl TryFrom<u8> for Op {
             x if x == Op::Print as u8 => Ok(Op::Print),
             x if x == Op::Jump as u8 => Ok(Op::Jump),
             x if x == Op::JumpIfFalse as u8 => Ok(Op::JumpIfFalse),
+            x if x == Op::Loop as u8 => Ok(Op::Loop),
             x if x == Op::Return as u8 => Ok(Op::Return),
             _ => {
                 eprintln!("New case needed in TryFrom<u8>?");
@@ -151,6 +153,7 @@ impl Chunk {
             Ok(Op::Print) => self.simple_instruction("OP_PRINT", offset),
             Ok(Op::Jump) => self.jump_instruction("OP_JUMP", 1, offset),
             Ok(Op::JumpIfFalse) => self.jump_instruction("OP_JUMP_IF_FALSE", 1, offset),
+            Ok(Op::Loop) => self.jump_instruction("OP_LOOP", -1, offset),
             Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
             Err(v) => {
                 println!("Unknown opcode {}", v);
@@ -188,7 +191,7 @@ impl Chunk {
             "{:16} {:4} -> {}",
             name,
             offset,
-            offset as i32 + 3 + sign as i32 * jump as i32
+            offset as i32 + 3 + sign * jump as i32
         );
         return offset + 3;
     }

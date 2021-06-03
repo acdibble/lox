@@ -114,7 +114,7 @@ impl VM {
     fn run(&mut self) -> Result<()> {
         macro_rules! binary_op {
       ($op: tt, $variant: ident) => {{
-        let value = match (self.peek(1)?, self.peek(0)?) {
+        let value = match (self.peek(0)?, self.peek(1)?) {
           (Value::Number(b), Value::Number(a)) => (a $op b),
           _ => {
             return self.runtime_error("Operands must be numbers.");
@@ -249,6 +249,10 @@ impl VM {
                     if self.peek(0)?.is_falsy() {
                         self.ip += offset
                     }
+                }
+                Op::Loop => {
+                    let offset = self.read_u16()?;
+                    self.ip -= offset as usize;
                 }
                 Op::Return => {
                     return Ok(());

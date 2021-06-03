@@ -212,6 +212,21 @@ impl<'a> Compiler<'a> {
         self.emit_byte(byte2);
     }
 
+    fn emit_loop(&mut self, loop_start: usize) {
+        self.emit_op(Op::Loop);
+
+        let offset: u16 = match (self.chunk.code.len() - loop_start + 2).try_into() {
+            Ok(val) => val,
+            Err(_) => {
+                self.error("Loop body too large.");
+                0
+            }
+        };
+
+        self.emit_byte((offset >> 8) as u8 & 0xff);
+        self.emit_byte((offset & 0xff) as u8);
+    }
+
     fn emit_jump(&mut self, instruction: Op) -> usize {
         self.emit_op(instruction);
         self.emit_byte(0xff);
@@ -527,6 +542,21 @@ impl<'a> Compiler<'a> {
         self.emit_op(Op::Print)
     }
 
+    fn while_statement(&mut self) {
+        let loop_start = self.chunk.code.len();
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(TokenKind::RightParen, "Expect ')' after condition.");
+
+        let exit_jump = self.emit_jump(Op::JumpIfFalse);
+        self.emit_op(Op::Pop);
+        self.statement();
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.emit_op(Op::Pop);
+    }
+
     fn synchronize(&mut self) {
         while self.parser.current.is_some() {
             if self.previous_kind() == TokenKind::Semicolon {
@@ -562,6 +592,8 @@ impl<'a> Compiler<'a> {
             self.print_statement();
         } else if self.match_current(TokenKind::If) {
             self.if_statement();
+        } else if self.match_current(TokenKind::While) {
+            self.while_statement();
         } else if self.match_current(TokenKind::LeftBrace) {
             self.begin_scope();
             self.block();
