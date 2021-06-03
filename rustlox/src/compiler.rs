@@ -517,6 +517,50 @@ impl<'a> Compiler<'a> {
         self.emit_op(Op::Pop)
     }
 
+    fn for_statement(&mut self) {
+        self.begin_scope();
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'for'.");
+        if self.match_current(TokenKind::Semicolon) {
+        } else if self.match_current(TokenKind::Var) {
+            self.var_declaration();
+        } else {
+            self.expression_statement();
+        }
+
+        let mut loop_start = self.chunk.code.len();
+        let mut exit_jump = None;
+
+        if !self.match_current(TokenKind::Semicolon) {
+            self.expression();
+            self.consume(TokenKind::Semicolon, "Expect ';' after loop condition.");
+
+            exit_jump = Some(self.emit_jump(Op::JumpIfFalse));
+            self.emit_op(Op::Pop);
+        }
+
+        if !self.match_current(TokenKind::RightParen) {
+            let body_jump = self.emit_jump(Op::Jump);
+            let increment_start = self.chunk.code.len();
+            self.expression();
+            self.emit_op(Op::Pop);
+            self.consume(TokenKind::RightParen, "Expect ')' after for clauses.");
+
+            self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+
+        self.statement();
+        self.emit_loop(loop_start);
+
+        if let Some(offset) = exit_jump {
+            self.patch_jump(offset);
+            self.emit_op(Op::Pop);
+        }
+
+        self.end_scope();
+    }
+
     fn if_statement(&mut self) {
         self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.");
         self.expression();
@@ -590,6 +634,8 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self.match_current(TokenKind::Print) {
             self.print_statement();
+        } else if self.match_current(TokenKind::For) {
+            self.for_statement();
         } else if self.match_current(TokenKind::If) {
             self.if_statement();
         } else if self.match_current(TokenKind::While) {
