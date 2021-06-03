@@ -152,10 +152,8 @@ impl<'a> Compiler<'a> {
         self.parser.previous = std::mem::take(&mut self.parser.current);
 
         loop {
-            let token = self.scanner.scan_token();
-            self.parser.current = Some(token);
-            let token = self.parser.current.as_ref().unwrap();
-            if token.kind != TokenKind::Error {
+            self.parser.current = self.scanner.next();
+            if self.parser.current.as_ref().unwrap().kind != TokenKind::Error {
                 break;
             }
 

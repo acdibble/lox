@@ -74,8 +74,12 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn advance(&mut self) -> Option<(usize, char)> {
+    fn advance(&mut self) -> Option<(usize, char)> {
         self.iter.next()
+    }
+
+    fn consume_while(&mut self, fun: fn(c: char) -> bool) {
+        while self.iter.next_if(|&(_, c)| fun(c)).is_some() {}
     }
 
     fn match_current(&mut self, expected: char) -> bool {
@@ -93,12 +97,8 @@ impl<'a> Scanner<'a> {
                     self.advance();
                 }
                 '/' => {
-                    if let Some((_, c)) = self.peek_next() {
-                        if c == '/' {
-                            while self.iter.next_if(|&(_, c)| c != '\n').is_some() {}
-                        } else {
-                            return;
-                        }
+                    if let Some((_, '/')) = self.peek_next() {
+                        self.consume_while(|c| c != '\n');
                     } else {
                         return;
                     }
@@ -159,18 +159,14 @@ impl<'a> Scanner<'a> {
     }
 
     fn number(&mut self) -> Token<'a> {
-        while self.iter.next_if(|&(_, c)| c.is_digit(10)).is_some() {}
+        self.consume_while(|c| c.is_digit(10));
 
         // Look for a fractional part.
-        if let Some((_, c)) = self.iter.peek() {
-            if *c == '.' {
-                if let Some((_, next)) = self.peek_next() {
-                    if next.is_digit(10) {
-                        // Consume the ".".
-                        self.advance();
-                        while self.iter.next_if(|&(_, c)| c.is_digit(10)).is_some() {}
-                    }
-                }
+        if let Some((_, '.')) = self.iter.peek() {
+            if let Some((_, '0'..='9')) = self.peek_next() {
+                // Consume the ".".
+                self.advance();
+                self.consume_while(|c| c.is_digit(10));
             }
         }
 
@@ -178,11 +174,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> Token<'a> {
-        while self
-            .iter
-            .next_if(|&(_, c)| c.is_ascii_alphanumeric() || c == '_')
-            .is_some()
-        {}
+        self.consume_while(|c| c.is_ascii_alphanumeric() || c == '_');
 
         let lexeme = self.get_lexeme();
         let kind = match lexeme {
@@ -211,20 +203,24 @@ impl<'a> Scanner<'a> {
             line: self.lines,
         }
     }
+}
 
-    pub fn scan_token(&mut self) -> Token<'a> {
+impl<'a> Iterator for Scanner<'a> {
+    type Item = Token<'a>;
+
+    fn next(&mut self) -> Option<Token<'a>> {
         self.skip_whitespace();
 
         let next = self.advance();
 
         if next.is_none() {
-            return self.make_token(TokenKind::EOF);
+            return Some(self.make_token(TokenKind::EOF));
         }
 
         let (start, c) = next.unwrap();
         self.start = start;
 
-        match c {
+        let token = match c {
             '(' => self.make_token(TokenKind::LeftParen),
             ')' => self.make_token(TokenKind::RightParen),
             '{' => self.make_token(TokenKind::LeftBrace),
@@ -264,10 +260,12 @@ impl<'a> Scanner<'a> {
                     self.make_token(TokenKind::Greater)
                 }
             }
-            '"' => return self.string(),
-            '0'..='9' => return self.number(),
-            'a'..='z' | 'A'..='Z' | '_' => return self.identifier(),
+            '"' => self.string(),
+            '0'..='9' => self.number(),
+            'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
             _ => self.make_error_token("Unexpected character."),
-        }
+        };
+
+        Some(token)
     }
 }

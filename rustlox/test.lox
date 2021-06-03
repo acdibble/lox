@@ -1,1 +1,3 @@
-print false or false or true or false or false;
+var test = 1.23;
+// test = 2;
+print (test
