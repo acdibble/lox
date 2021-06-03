@@ -40,6 +40,7 @@ impl Precedence {
 enum ErrorLocation {
     Current,
     Previous,
+    End,
 }
 
 type ParseFn<'a> = fn(&mut Compiler<'a>, bool);
@@ -108,10 +109,6 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn current_kind(&self) -> TokenKind {
-        self.parser.current.as_ref().unwrap().kind
-    }
-
     fn previous_kind(&self) -> TokenKind {
         self.parser.previous.as_ref().unwrap().kind
     }
@@ -122,16 +119,23 @@ impl<'a> Compiler<'a> {
         }
 
         let token = match location {
-            ErrorLocation::Current => self.parser.current.as_ref().unwrap(),
-            ErrorLocation::Previous => self.parser.previous.as_ref().unwrap(),
+            ErrorLocation::Current => self.parser.current.as_ref(),
+            ErrorLocation::Previous => self.parser.previous.as_ref(),
+            ErrorLocation::End => None,
         };
 
-        eprint!("[line {}] Error", token.line);
+        let line = if let Some(token) = token {
+            token.line
+        } else {
+            self.scanner.lines
+        };
 
-        if token.kind == TokenKind::EOF {
+        eprint!("[line {}] Error", line);
+
+        if token.is_none() {
             eprint!(" at end");
-        } else if token.kind != TokenKind::Error {
-            eprint!(" at '{}'", token.lexeme);
+        } else if token.unwrap().kind != TokenKind::Error {
+            eprint!(" at '{}'", token.unwrap().lexeme);
         }
 
         eprintln!(": {}", message);
@@ -141,7 +145,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn error_at_current(&mut self, message: &str) {
-        self.error_at(ErrorLocation::Current, message)
+        if self.parser.current.is_none() {
+            self.error_at(ErrorLocation::End, message)
+        } else {
+            self.error_at(ErrorLocation::Current, message)
+        }
     }
 
     fn error(&mut self, message: &str) {
@@ -153,6 +161,9 @@ impl<'a> Compiler<'a> {
 
         loop {
             self.parser.current = self.scanner.next();
+            if self.parser.current.is_none() {
+                break;
+            }
             if self.parser.current.as_ref().unwrap().kind != TokenKind::Error {
                 break;
             }
@@ -162,7 +173,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn consume(&mut self, kind: TokenKind, message: &str) {
-        if self.current_kind() == kind {
+        if self.check(kind) {
             self.advance();
             return;
         }
@@ -171,7 +182,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn check(&self, kind: TokenKind) -> bool {
-        self.current_kind() == kind
+        if let Some(token) = self.parser.current {
+            token.kind == kind
+        } else {
+            false
+        }
     }
 
     fn match_current(&mut self, kind: TokenKind) -> bool {
@@ -355,7 +370,9 @@ impl<'a> Compiler<'a> {
         let can_assign = precedence <= Precedence::Assignment;
         prefix_rule.unwrap()(self, can_assign);
 
-        while precedence <= Self::get_rule(self.current_kind()).2 {
+        while self.parser.current.is_some()
+            && precedence <= Self::get_rule(self.parser.current.as_ref().unwrap().kind).2
+        {
             self.advance();
             if let Some(infix_rule) = Self::get_rule(self.previous_kind()).1 {
                 infix_rule(self, can_assign);
@@ -456,7 +473,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn block(&mut self) {
-        while !self.check(TokenKind::RightBrace) && !self.check(TokenKind::EOF) {
+        while self.parser.current.is_some() && !self.check(TokenKind::RightBrace) {
             self.declaration();
         }
 
@@ -511,13 +528,12 @@ impl<'a> Compiler<'a> {
     }
 
     fn synchronize(&mut self) {
-        loop {
+        while self.parser.current.is_some() {
             if self.previous_kind() == TokenKind::Semicolon {
                 return;
             }
-            match self.current_kind() {
-                TokenKind::EOF
-                | TokenKind::Fun
+            match self.parser.current.as_ref().unwrap().kind {
+                TokenKind::Fun
                 | TokenKind::Var
                 | TokenKind::For
                 | TokenKind::If
@@ -585,7 +601,7 @@ impl<'a> Compiler<'a> {
     fn compile(&mut self) -> bool {
         self.advance();
 
-        while !self.match_current(TokenKind::EOF) {
+        while self.parser.current.is_some() {
             self.declaration();
         }
 

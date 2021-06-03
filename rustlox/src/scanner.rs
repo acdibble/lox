@@ -47,7 +47,6 @@ pub enum TokenKind {
     While,
 
     Error,
-    EOF,
 }
 
 #[derive(Copy, Clone)]
@@ -59,7 +58,7 @@ pub struct Token<'a> {
 
 pub struct Scanner<'a> {
     source: &'a String,
-    lines: i32,
+    pub lines: i32,
     start: usize,
     iter: Peekable<Enumerate<std::str::Chars<'a>>>,
 }
@@ -214,7 +213,7 @@ impl<'a> Iterator for Scanner<'a> {
         let next = self.advance();
 
         if next.is_none() {
-            return Some(self.make_token(TokenKind::EOF));
+            return None;
         }
 
         let (start, c) = next.unwrap();
