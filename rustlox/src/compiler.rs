@@ -1,7 +1,8 @@
-use crate::chunk::*;
+use crate::chunk::{self, Chunk, Op};
 use crate::scanner::*;
 use crate::string;
 use crate::value::*;
+use crate::vm::InterpretError;
 use std::convert::TryInto;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq)]
@@ -55,14 +56,21 @@ struct Parser<'a> {
 
 #[derive(Copy, Clone)]
 struct Local<'a> {
-    name: Token<'a>,
+    name: &'a str,
     depth: Option<usize>,
 }
 
+enum FunctionType {
+    Function,
+    Script,
+}
+
 pub struct Compiler<'a> {
+    current_function: Function,
+    function_type: FunctionType,
+
     parser: Parser<'a>,
     scanner: Scanner<'a>,
-    chunk: &'a mut Chunk,
     locals: Vec<Local<'a>>,
     scope_depth: usize,
 }
@@ -94,7 +102,13 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn new(scanner: Scanner<'a>, chunk: &'a mut Chunk) -> Compiler<'a> {
+    pub fn new(scanner: Scanner<'a>) -> Compiler<'a> {
+        let function_name = "script";
+        let function = Function {
+            arity: 0,
+            chunk: chunk::Handle::new(function_name),
+            name: string::Handle::from_str(function_name),
+        };
         Compiler {
             parser: Parser {
                 previous: None,
@@ -103,10 +117,22 @@ impl<'a> Compiler<'a> {
                 panic_mode: false,
             },
             scanner: scanner,
-            chunk: chunk,
-            locals: Default::default(),
+            current_function: function,
+            function_type: FunctionType::Script,
             scope_depth: 0,
+            locals: vec![Local {
+                depth: Some(0),
+                name: "",
+            }],
         }
+    }
+
+    fn current_chunk_mut(&mut self) -> &mut Chunk {
+        self.current_function.chunk.get_chunk_mut()
+    }
+
+    fn current_chunk(&mut self) -> &Chunk {
+        self.current_function.chunk.get_chunk()
     }
 
     fn previous_kind(&self) -> TokenKind {
@@ -199,8 +225,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn emit_byte(&mut self, byte: u8) {
-        self.chunk
-            .write(byte, self.parser.previous.as_ref().unwrap().line);
+        let line = self.parser.previous.as_ref().unwrap().line;
+        self.current_chunk_mut().write(byte, line)
     }
 
     fn emit_op(&mut self, op: Op) {
@@ -215,7 +241,7 @@ impl<'a> Compiler<'a> {
     fn emit_loop(&mut self, loop_start: usize) {
         self.emit_op(Op::Loop);
 
-        let offset: u16 = match (self.chunk.code.len() - loop_start + 2).try_into() {
+        let offset: u16 = match (self.current_chunk_mut().code.len() - loop_start + 2).try_into() {
             Ok(val) => val,
             Err(_) => {
                 self.error("Loop body too large.");
@@ -231,7 +257,7 @@ impl<'a> Compiler<'a> {
         self.emit_op(instruction);
         self.emit_byte(0xff);
         self.emit_byte(0xff);
-        return self.chunk.code.len() - 2;
+        return self.current_chunk_mut().code.len() - 2;
     }
 
     fn emit_return(&mut self) {
@@ -239,7 +265,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
-        match self.chunk.add_constant(value) {
+        match self.current_chunk_mut().add_constant(value) {
             Ok(constant) => constant,
             Err(()) => {
                 self.error("Too many constants in one chunk.");
@@ -254,7 +280,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump: u16 = match (self.chunk.code.len() - offset - 2).try_into() {
+        let jump: u16 = match (self.current_chunk_mut().code.len() - offset - 2).try_into() {
             Ok(value) => value,
             Err(_) => {
                 self.error("Too much code to jump over.");
@@ -262,8 +288,8 @@ impl<'a> Compiler<'a> {
             }
         };
 
-        self.chunk.code[offset] = ((jump >> 8) & 0xff) as u8;
-        self.chunk.code[offset + 1] = (jump & 0xff) as u8;
+        self.current_chunk_mut().code[offset] = ((jump >> 8) & 0xff) as u8;
+        self.current_chunk_mut().code[offset + 1] = (jump & 0xff) as u8;
     }
 
     fn binary(&mut self, _can_assign: bool) {
@@ -405,7 +431,7 @@ impl<'a> Compiler<'a> {
 
     fn resolve_local(&mut self, name: &str) -> Option<u8> {
         for (index, local) in self.locals.iter().enumerate().rev() {
-            if local.name.lexeme == name {
+            if local.name == name {
                 if local.depth.is_none() {
                     self.error("Can't read local variable in its own initializer.");
                 }
@@ -422,7 +448,10 @@ impl<'a> Compiler<'a> {
             return;
         }
 
-        self.locals.push(Local { name, depth: None })
+        self.locals.push(Local {
+            name: name.lexeme,
+            depth: None,
+        })
     }
 
     fn declare_variable(&mut self) {
@@ -437,7 +466,7 @@ impl<'a> Compiler<'a> {
                 break;
             }
 
-            if name.lexeme == local.name.lexeme {
+            if name.lexeme == local.name {
                 unique = false;
                 break;
             }
@@ -527,7 +556,7 @@ impl<'a> Compiler<'a> {
             self.expression_statement();
         }
 
-        let mut loop_start = self.chunk.code.len();
+        let mut loop_start = self.current_chunk_mut().code.len();
         let mut exit_jump = None;
 
         if !self.match_current(TokenKind::Semicolon) {
@@ -540,7 +569,7 @@ impl<'a> Compiler<'a> {
 
         if !self.match_current(TokenKind::RightParen) {
             let body_jump = self.emit_jump(Op::Jump);
-            let increment_start = self.chunk.code.len();
+            let increment_start = self.current_chunk_mut().code.len();
             self.expression();
             self.emit_op(Op::Pop);
             self.consume(TokenKind::RightParen, "Expect ')' after for clauses.");
@@ -587,7 +616,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn while_statement(&mut self) {
-        let loop_start = self.chunk.code.len();
+        let loop_start = self.current_chunk_mut().code.len();
         self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.");
         self.expression();
         self.consume(TokenKind::RightParen, "Expect ')' after condition.");
@@ -649,14 +678,16 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn end_compiler(&mut self) {
+    fn end_compiler(&mut self) -> &Function {
         self.emit_return();
         {
             #![cfg(feature = "trace-execution")]
+            let name = &self.current_function.name.as_str().string;
             if !self.parser.had_error {
-                self.chunk.disassemble("code");
+                self.current_chunk().disassemble(name);
             }
         }
+        &self.current_function
     }
 
     fn begin_scope(&mut self) {
@@ -676,19 +707,24 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile(&mut self) -> bool {
+    fn compile(&mut self) -> Result<Function, InterpretError> {
         self.advance();
 
         while self.parser.current.is_some() {
             self.declaration();
         }
 
-        self.end_compiler();
-        !self.parser.had_error
+        let had_error = self.parser.had_error;
+        let function = self.end_compiler();
+        if had_error {
+            Err(InterpretError::CompileError)
+        } else {
+            Ok(*function)
+        }
     }
 }
 
-pub fn compile(source: &String, chunk: &mut Chunk) -> bool {
-    let mut compiler = Compiler::new(Scanner::new(source), chunk);
+pub fn compile(source: &String) -> Result<Function, InterpretError> {
+    let mut compiler = Compiler::new(Scanner::new(source));
     compiler.compile()
 }

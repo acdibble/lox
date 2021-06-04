@@ -1,4 +1,12 @@
+use crate::chunk;
 use crate::string;
+
+#[derive(Copy, Clone, Debug)]
+pub struct Function {
+    pub arity: usize,
+    pub chunk: chunk::Handle,
+    pub name: string::Handle,
+}
 
 #[derive(Copy, Clone, Debug)]
 pub enum Value {
@@ -6,6 +14,7 @@ pub enum Value {
     Number(f64),
     Nil,
     String(string::Handle),
+    Function(Function),
 }
 
 impl PartialEq for Value {
@@ -33,6 +42,7 @@ impl Value {
             Value::Bool(value) => print!("{}", value),
             Value::Number(value) => print!("{}", value),
             Value::String(value) => print!("{}", value),
+            Value::Function(function) => print!("<fn {}>", function.name),
             Value::Nil => print!("nil"),
         }
     }

@@ -1,3 +1,2 @@
-for (var i = 0; i < 0; i = i + 1) {
-  print i;
+for (var i = 0; i < 10000000; i = i + 1) {
 }
