@@ -1,61 +1,7 @@
 use crate::value::*;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::result::Result;
-
-#[derive(Copy, Clone, Debug)]
-pub struct Handle(usize);
-
-impl Handle {
-    pub fn new(name: &'static str) -> Handle {
-        with_store(|store| store.create_chunk(name))
-    }
-
-    pub fn get_chunk_mut(&self) -> &mut Chunk {
-        with_store(|store| unsafe {
-            ::std::mem::transmute::<&mut Chunk, &mut Chunk>(store.get_chunk(self.0))
-        })
-    }
-
-    pub fn get_chunk(&self) -> &Chunk {
-        with_store(|store| unsafe {
-            ::std::mem::transmute::<&Chunk, &Chunk>(store.get_chunk(self.0))
-        })
-    }
-}
-
-#[derive(Default)]
-struct ChunkStore {
-    handle_map: HashMap<Box<str>, Handle>,
-    functions: Vec<Chunk>,
-}
-
-impl ChunkStore {
-    fn create_chunk(&mut self, name: &'static str) -> Handle {
-        let name = Box::from(name);
-        if let Some(&chunk) = self.handle_map.get(&name) {
-            return chunk;
-        }
-
-        let handle = Handle(self.functions.len());
-        self.functions.push(Chunk::new());
-        self.handle_map.insert(name, handle);
-        return handle;
-    }
-
-    fn get_chunk(&mut self, index: usize) -> &mut Chunk {
-        &mut self.functions[index]
-    }
-}
-
-fn with_store<T, F: FnOnce(&mut ChunkStore) -> T>(f: F) -> T {
-    thread_local!(static INTERNER: RefCell<ChunkStore> = {
-        RefCell::new(Default::default())
-    });
-    INTERNER.with(|interner| f(&mut *interner.borrow_mut()))
-}
 
 #[repr(u8)]
 pub enum Op {
@@ -132,7 +78,7 @@ impl TryFrom<&u8> for Op {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,

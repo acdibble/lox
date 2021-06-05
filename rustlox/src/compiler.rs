@@ -1,4 +1,4 @@
-use crate::chunk::{self, Chunk, Op};
+use crate::chunk::*;
 use crate::scanner::*;
 use crate::string;
 use crate::value::*;
@@ -103,12 +103,6 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn new(scanner: Scanner<'a>) -> Compiler<'a> {
-        let function_name = "script";
-        let function = Function {
-            arity: 0,
-            chunk: chunk::Handle::new(function_name),
-            name: string::Handle::from_str(function_name),
-        };
         Compiler {
             parser: Parser {
                 previous: None,
@@ -117,7 +111,11 @@ impl<'a> Compiler<'a> {
                 panic_mode: false,
             },
             scanner: scanner,
-            current_function: function,
+            current_function: Function {
+                arity: 0,
+                chunk: Chunk::new(),
+                name: string::Handle::from_str(""),
+            },
             function_type: FunctionType::Script,
             scope_depth: 0,
             locals: vec![Local {
@@ -128,11 +126,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn current_chunk_mut(&mut self) -> &mut Chunk {
-        self.current_function.chunk.get_chunk_mut()
-    }
-
-    fn current_chunk(&mut self) -> &Chunk {
-        self.current_function.chunk.get_chunk()
+        &mut self.current_function.chunk
     }
 
     fn previous_kind(&self) -> TokenKind {
@@ -678,7 +672,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn end_compiler(&mut self) -> &Function {
+    fn end_compiler(&mut self) {
         self.emit_return();
         {
             #![cfg(feature = "trace-execution")]
@@ -687,7 +681,6 @@ impl<'a> Compiler<'a> {
                 self.current_chunk().disassemble(name);
             }
         }
-        &self.current_function
     }
 
     fn begin_scope(&mut self) {
@@ -707,7 +700,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn compile(&mut self) -> Result<Function, InterpretError> {
+    fn compile(&mut self) -> Result<(), InterpretError> {
         self.advance();
 
         while self.parser.current.is_some() {
@@ -715,16 +708,17 @@ impl<'a> Compiler<'a> {
         }
 
         let had_error = self.parser.had_error;
-        let function = self.end_compiler();
+        self.end_compiler();
         if had_error {
             Err(InterpretError::CompileError)
         } else {
-            Ok(*function)
+            Ok(())
         }
     }
 }
 
 pub fn compile(source: &String) -> Result<Function, InterpretError> {
     let mut compiler = Compiler::new(Scanner::new(source));
-    compiler.compile()
+    compiler.compile()?;
+    Ok(compiler.current_function)
 }
