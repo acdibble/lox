@@ -4,7 +4,6 @@ use crate::value::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::rc::Rc;
 
 fn with_vm<T, F: FnOnce(&mut VM) -> T>(f: F) -> T {
     thread_local!(static STATIC_VM: RefCell<VM> = {
@@ -14,13 +13,13 @@ fn with_vm<T, F: FnOnce(&mut VM) -> T>(f: F) -> T {
 }
 
 struct CallFrame {
-    function: Rc<Function>,
+    function: Function,
     ip: usize,
     starts_at: usize,
 }
 
 impl CallFrame {
-    fn new(function: Rc<Function>, starts_at: usize) -> CallFrame {
+    fn new(function: Function, starts_at: usize) -> CallFrame {
         CallFrame {
             function,
             starts_at,
@@ -49,7 +48,6 @@ type Result<T> = std::result::Result<T, InterpretError>;
 pub fn interpret(source: &String) -> Result<()> {
     with_vm(|vm| {
         let function = compile(source)?;
-        let function = Rc::from(function);
         vm.stack.push(Value::Function(function.clone()));
         vm.frames.push(CallFrame::new(function, 0));
         vm.run()
@@ -213,11 +211,13 @@ impl VM {
                 }
                 Op::GetLocal => {
                     let slot: usize = read_u8!()?.into();
-                    self.push(self.stack[slot].clone());
+                    let offset = self.current_frame().starts_at;
+                    self.push(self.stack[slot + offset].clone());
                 }
                 Op::SetLocal => {
                     let slot: usize = read_u8!()?.into();
-                    self.stack[slot] = self.peek(0)?.clone();
+                    let offset = self.current_frame().starts_at;
+                    self.stack[slot + offset] = self.peek(0)?.clone();
                 }
                 Op::GetGlobal => {
                     let name = read_string!()?.as_str().string;

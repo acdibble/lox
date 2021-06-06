@@ -1,2 +1,6 @@
-for (var i = 0; i < 10000000; i = i + 1) {
+fun areWeHavingItYet() {
+  print "Yes we are!";
 }
+
+print areWeHavingItYet;
+print areWeHavingItYet == areWeHavingItYet;
