@@ -49,7 +49,7 @@ pub fn interpret(source: &String) -> Result<()> {
     with_vm(|vm| {
         let function = compile(source)?;
         vm.stack.push(Value::Function(function.clone()));
-        vm.frames.push(CallFrame::new(function, 0));
+        vm.call(function, 0).ok();
         vm.run()
     })
 }
@@ -82,9 +82,14 @@ impl VM {
     fn runtime_error<'a>(&mut self, string: &'a str) -> Result<()> {
         eprintln!("{}", string);
 
-        let frame = self.current_frame();
-        let line = frame.function.chunk.lines[frame.ip];
-        eprintln!("[line {}] in script", line);
+        for frame in self.frames.iter().rev() {
+            let function = &frame.function;
+            let line = function.chunk.lines[frame.ip - 1];
+
+            eprintln!("[line {}] in {}()", line, function.get_name());
+        }
+        // let frame = self.current_frame();
+        // eprintln!("[line {}] in script", line);
         self.reset_stack();
         Err(InterpretError::RuntimeError)
     }
@@ -105,9 +110,35 @@ impl VM {
     #[inline(always)]
     fn peek(&self, index: usize) -> Result<&Value> {
         let len = self.stack.len();
-        match self.stack.get(len - 1 - index) {
+        let offset = self.frames.last().unwrap().starts_at;
+        match self.stack.get(len - 1 - index + offset) {
             Some(value) => Ok(value),
             None => Err(InterpretError::InternalError("Can't peek on empty stack.")),
+        }
+    }
+
+    #[inline(always)]
+    fn call(&mut self, function: Function, arg_count: usize) -> Result<()> {
+        if arg_count != function.arity {
+            return self.runtime_error(
+                format!(
+                    "Expected {} arguments but got {}.",
+                    function.arity, arg_count
+                )
+                .as_str(),
+            );
+        }
+
+        let starts_at = self.stack.len() - arg_count - 1;
+        self.frames.push(CallFrame::new(function, starts_at));
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<()> {
+        match callee {
+            Value::Function(function) => self.call(function, arg_count),
+            _ => self.runtime_error("Can only call functions and classes."),
         }
     }
 
@@ -128,11 +159,7 @@ impl VM {
         macro_rules! read_constant {
             () => {{
                 let constant: usize = read_u8!()?.into();
-                match self
-                    .current_chunk()
-                    .constants
-                    .get(constant + self.current_frame().starts_at)
-                {
+                match self.current_chunk().constants.get(constant) {
                     Some(value) => Ok(value),
                     _ => return Err(InterpretError::InternalError("Failed to read constant.")),
                 }
@@ -303,8 +330,21 @@ impl VM {
                     let frame = self.current_frame_mut();
                     frame.ip -= offset as usize;
                 }
+                Op::Call => {
+                    let arg_count = read_u8!()? as usize;
+                    let callee = self.peek(arg_count)?.clone();
+                    self.call_value(callee, arg_count)?;
+                }
                 Op::Return => {
-                    return Ok(());
+                    let result = self.pop()?;
+                    let frame = self.frames.pop().unwrap();
+                    if self.frames.len() == 0 {
+                        self.pop()?;
+                        return Ok(());
+                    }
+
+                    self.stack.truncate(frame.starts_at);
+                    self.push(result)
                 }
             }
         }

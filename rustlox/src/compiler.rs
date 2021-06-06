@@ -62,6 +62,7 @@ struct Local<'a> {
     depth: Option<usize>,
 }
 
+#[derive(PartialEq)]
 enum FunctionKind {
     Function,
     Script,
@@ -108,7 +109,7 @@ struct CompilerWrapper<'a> {
 impl<'a> CompilerWrapper<'a> {
     fn get_rule(kind: TokenKind) -> ParseRule<'a> {
         match kind {
-            TokenKind::LeftParen => (Some(Self::grouping), None, Precedence::None),
+            TokenKind::LeftParen => (Some(Self::grouping), Some(Self::call), Precedence::Call),
             TokenKind::Minus => (Some(Self::unary), Some(Self::binary), Precedence::Term),
             TokenKind::Plus => (None, Some(Self::binary), Precedence::Term),
             TokenKind::Slash => (None, Some(Self::binary), Precedence::Factor),
@@ -154,6 +155,11 @@ impl<'a> CompilerWrapper<'a> {
     fn with_current_function_mut<T, F: FnOnce(&mut Function) -> T>(&mut self, f: F) -> T {
         let mut current = self.current.as_ref().unwrap().borrow_mut();
         f(&mut current.function)
+    }
+
+    fn with_current_mut<T, F: FnOnce(&mut Compiler) -> T>(&mut self, f: F) -> T {
+        let mut current = self.current.as_ref().unwrap().borrow_mut();
+        f(&mut current)
     }
 
     fn previous_kind(&self) -> TokenKind {
@@ -285,6 +291,7 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn emit_return(&mut self) {
+        self.emit_op(Op::Nil);
         self.emit_op(Op::Return);
     }
 
@@ -338,6 +345,11 @@ impl<'a> CompilerWrapper<'a> {
             TokenKind::Slash => self.emit_op(Op::Divide),
             _ => unreachable!(),
         }
+    }
+
+    fn call(&mut self, _can_assign: bool) {
+        let arg_count = self.argument_list();
+        self.emit_bytes(Op::Call as u8, arg_count);
     }
 
     fn literal(&mut self, _can_assign: bool) {
@@ -544,6 +556,29 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_bytes(Op::DefineGlobal as u8, global)
     }
 
+    fn argument_list(&mut self) -> u8 {
+        let mut arg_count = 0;
+        if !self.check(TokenKind::RightParen) {
+            loop {
+                self.expression();
+                arg_count += 1;
+
+                if !self.match_current(TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenKind::RightParen, "Expect ')' after arguments.");
+
+        match arg_count.try_into() {
+            Ok(count) => count,
+            _ => {
+                self.error("Can't have more than 255 arguments.");
+                0
+            }
+        }
+    }
+
     fn and(&mut self, _can_assign: bool) {
         let end_jump = self.emit_jump(Op::JumpIfFalse);
 
@@ -602,7 +637,6 @@ impl<'a> CompilerWrapper<'a> {
 
     fn fun_declaration(&mut self) {
         let global = self.parse_variable("Expect function name.");
-        println!("global: {}", global);
         self.mark_initialized();
         self.function(FunctionKind::Function);
         self.define_variable(global);
@@ -693,6 +727,20 @@ impl<'a> CompilerWrapper<'a> {
         self.patch_jump(else_jump);
     }
 
+    fn return_statement(&mut self) {
+        if self.current.as_ref().unwrap().borrow().function_kind == FunctionKind::Script {
+            self.error("Can't return from top-level code.");
+        }
+
+        if self.match_current(TokenKind::Semicolon) {
+            self.emit_return();
+        } else {
+            self.expression();
+            self.consume(TokenKind::Semicolon, "Expect ';' after return value.");
+            self.emit_op(Op::Return);
+        }
+    }
+
     fn print_statement(&mut self) {
         self.expression();
         self.consume(TokenKind::Semicolon, "Expect ';' after value.");
@@ -753,6 +801,8 @@ impl<'a> CompilerWrapper<'a> {
             self.for_statement();
         } else if self.match_current(TokenKind::If) {
             self.if_statement();
+        } else if self.match_current(TokenKind::Return) {
+            self.return_statement();
         } else if self.match_current(TokenKind::While) {
             self.while_statement();
         } else if self.match_current(TokenKind::LeftBrace) {
@@ -783,20 +833,28 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn begin_scope(&mut self) {
-        self.current.as_ref().unwrap().borrow_mut().scope_depth += 1;
+        self.with_current_mut(|current| current.scope_depth += 1)
     }
 
     fn end_scope(&mut self) {
-        self.current.as_ref().unwrap().borrow_mut().scope_depth -= 1;
+        let pop_count = self.with_current_mut(|current| {
+            current.scope_depth -= 1;
 
-        let mut current = self.current.as_ref().unwrap().borrow_mut();
-
-        while let Some(local) = current.locals.last() {
-            if local.depth.unwrap() > current.scope_depth {
-                current.locals.pop();
-            } else {
-                break;
+            let mut pop_count = 0;
+            while let Some(local) = current.locals.last() {
+                if local.depth.unwrap() > current.scope_depth {
+                    current.locals.pop();
+                    pop_count += 1;
+                } else {
+                    break;
+                }
             }
+
+            pop_count
+        });
+
+        for _ in 0..pop_count {
+            self.emit_op(Op::Pop);
         }
     }
 

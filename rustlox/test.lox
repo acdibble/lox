@@ -1,6 +1,9 @@
-fun areWeHavingItYet() {
-  print "Yes we are!";
-}
+fun noop() {}
 
-print areWeHavingItYet;
-print areWeHavingItYet == areWeHavingItYet;
+for (var i = 0; i < 1; i = i + 1) {
+  noop();
+  var test = 1;
+  var test2 = 2;
+  var test3 = test + test2;
+  print test3;
+}

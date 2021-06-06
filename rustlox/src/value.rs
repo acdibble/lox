@@ -9,6 +9,15 @@ pub struct Function {
     pub name: string::Handle,
 }
 
+impl Function {
+    pub fn get_name(&self) -> &str {
+        match self.name.as_str().string {
+            "" => "script",
+            value => value,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Bool(bool),
@@ -44,8 +53,8 @@ impl Value {
             Value::Bool(value) => print!("{}", value),
             Value::Number(value) => print!("{}", value),
             Value::String(value) => print!("{}", value),
-            Value::Function(function) => match function.name.as_str().string {
-                "" => print!("script"),
+            Value::Function(function) => match function.get_name() {
+                "script" => print!("script"),
                 name => print!("<fn {}>", name),
             },
             Value::Nil => print!("nil"),

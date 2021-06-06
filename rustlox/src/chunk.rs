@@ -28,6 +28,7 @@ pub enum Op {
     Jump,
     JumpIfFalse,
     Loop,
+    Call,
     Return,
 }
 
@@ -59,6 +60,7 @@ impl TryFrom<u8> for Op {
             x if x == Op::Jump as u8 => Ok(Op::Jump),
             x if x == Op::JumpIfFalse as u8 => Ok(Op::JumpIfFalse),
             x if x == Op::Loop as u8 => Ok(Op::Loop),
+            x if x == Op::Call as u8 => Ok(Op::Call),
             x if x == Op::Return as u8 => Ok(Op::Return),
             _ => {
                 if v < Op::Return as u8 {
@@ -153,6 +155,7 @@ impl Chunk {
             Ok(Op::Jump) => self.jump_instruction("OP_JUMP", 1, offset),
             Ok(Op::JumpIfFalse) => self.jump_instruction("OP_JUMP_IF_FALSE", 1, offset),
             Ok(Op::Loop) => self.jump_instruction("OP_LOOP", -1, offset),
+            Ok(Op::Call) => self.byte_instruction("OP_CALL", offset),
             Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
             Err(v) => {
                 println!("Unknown opcode {}", v);
