@@ -1,9 +1,8 @@
-fun noop() {}
-
-for (var i = 0; i < 1; i = i + 1) {
-  noop();
-  var test = 1;
-  var test2 = 2;
-  var test3 = test + test2;
-  print test3;
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 2) + fib(n - 1);
 }
+
+var start = clock();
+print fib(35);
+print clock() - start;

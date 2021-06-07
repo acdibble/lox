@@ -1,8 +1,9 @@
 use crate::chunk::Chunk;
+use crate::native;
 use crate::string;
 use std::rc::Rc;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Function {
     pub arity: usize,
     pub chunk: Rc<Chunk>,
@@ -10,7 +11,7 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn get_name(&self) -> &str {
+    pub fn get_name(&self) -> &'static str {
         match self.name.as_str().string {
             "" => "script",
             value => value,
@@ -18,13 +19,14 @@ impl Function {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     Bool(bool),
     Number(f64),
     Nil,
     String(string::Handle),
     Function(Function),
+    Native(native::Function),
 }
 
 impl PartialEq for Value {
@@ -57,6 +59,7 @@ impl Value {
                 "script" => print!("script"),
                 name => print!("<fn {}>", name),
             },
+            Value::Native(_) => print!("<native fn>"),
             Value::Nil => print!("nil"),
         }
     }

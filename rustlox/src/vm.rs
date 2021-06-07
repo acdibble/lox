@@ -1,5 +1,6 @@
 use crate::chunk::*;
 use crate::compiler::*;
+use crate::native;
 use crate::value::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -56,7 +57,11 @@ pub fn interpret(source: &String) -> Result<()> {
 
 impl VM {
     pub fn new() -> VM {
-        Default::default()
+        let mut vm: VM = Default::default();
+
+        vm.define_native("clock", native::clock);
+
+        vm
     }
 
     fn reset_stack(&mut self) {
@@ -88,10 +93,12 @@ impl VM {
 
             eprintln!("[line {}] in {}()", line, function.get_name());
         }
-        // let frame = self.current_frame();
-        // eprintln!("[line {}] in script", line);
         self.reset_stack();
         Err(InterpretError::RuntimeError)
+    }
+
+    fn define_native(&mut self, name: &'static str, function: native::Function) {
+        self.globals.insert(name, Value::Native(function));
     }
 
     #[inline(always)]
@@ -110,8 +117,7 @@ impl VM {
     #[inline(always)]
     fn peek(&self, index: usize) -> Result<&Value> {
         let len = self.stack.len();
-        let offset = self.frames.last().unwrap().starts_at;
-        match self.stack.get(len - 1 - index + offset) {
+        match self.stack.get(len - 1 - index) {
             Some(value) => Ok(value),
             None => Err(InterpretError::InternalError("Can't peek on empty stack.")),
         }
@@ -135,9 +141,19 @@ impl VM {
     }
 
     #[inline(always)]
+    fn call_native(&mut self, function: native::Function, arg_count: usize) -> Result<()> {
+        let arg_start = self.stack.len() - arg_count - 1;
+        let result = function(&self.stack[arg_start..]);
+        self.stack.truncate(arg_start);
+        self.stack.push(result);
+        Ok(())
+    }
+
+    #[inline(always)]
     fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<()> {
         match callee {
             Value::Function(function) => self.call(function, arg_count),
+            Value::Native(function) => self.call_native(function, arg_count),
             _ => self.runtime_error("Can only call functions and classes."),
         }
     }

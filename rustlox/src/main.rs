@@ -1,5 +1,6 @@
 mod chunk;
 mod compiler;
+mod native;
 mod scanner;
 mod string;
 mod value;

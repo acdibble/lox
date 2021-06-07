@@ -146,6 +146,11 @@ impl<'a> CompilerWrapper<'a> {
         }
     }
 
+    fn with_current_chunk<T, F: FnOnce(&Chunk) -> T>(&self, f: F) -> T {
+        let current = self.current.as_ref().unwrap().borrow();
+        f(&current.function.chunk)
+    }
+
     fn with_current_chunk_mut<T, F: FnOnce(&mut Chunk) -> T>(&mut self, f: F) -> T {
         let mut current = self.current.as_ref().unwrap().borrow_mut();
         let chunk = Rc::get_mut(&mut current.function.chunk).unwrap();
@@ -192,7 +197,6 @@ impl<'a> CompilerWrapper<'a> {
         }
 
         eprintln!(": {}", message);
-        drop(token);
         self.parser.panic_mode = true;
         self.parser.had_error = true;
     }
@@ -214,10 +218,9 @@ impl<'a> CompilerWrapper<'a> {
 
         loop {
             self.parser.current = self.scanner.next();
-            if self.parser.current.is_none() {
-                break;
-            }
-            if self.parser.current.as_ref().unwrap().kind != TokenKind::Error {
+            if self.parser.current.is_none()
+                || self.parser.current.as_ref().unwrap().kind != TokenKind::Error
+            {
                 break;
             }
 
@@ -260,6 +263,11 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_byte(op as u8)
     }
 
+    fn emit_ops(&mut self, op1: Op, op2: Op) {
+        self.emit_op(op1);
+        self.emit_op(op2);
+    }
+
     fn emit_bytes(&mut self, byte1: u8, byte2: u8) {
         self.emit_byte(byte1);
         self.emit_byte(byte2);
@@ -269,7 +277,7 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_op(Op::Loop);
 
         let offset: u16 = match self
-            .with_current_chunk_mut(|chunk| chunk.code.len() - loop_start + 2)
+            .with_current_chunk(|chunk| chunk.code.len() - loop_start + 2)
             .try_into()
         {
             Ok(val) => val,
@@ -287,7 +295,7 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_op(instruction);
         self.emit_byte(0xff);
         self.emit_byte(0xff);
-        return self.with_current_chunk_mut(|chunk| chunk.code.len() - 2);
+        return self.with_current_chunk(|chunk| chunk.code.len() - 2);
     }
 
     fn emit_return(&mut self) {
@@ -311,8 +319,8 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn patch_jump(&mut self, offset: usize) {
-        let jump = match self
-            .with_current_chunk_mut(|chunk| chunk.code.len() - offset - 2)
+        let jump: u16 = match self
+            .with_current_chunk(|chunk| chunk.code.len() - offset - 2)
             .try_into()
         {
             Ok(value) => value,
@@ -333,12 +341,12 @@ impl<'a> CompilerWrapper<'a> {
         self.parse_precedence(precedence);
 
         match operator_type {
-            TokenKind::BangEqual => self.emit_bytes(Op::Equal as u8, Op::Not as u8),
+            TokenKind::BangEqual => self.emit_ops(Op::Equal, Op::Not),
             TokenKind::EqualEqual => self.emit_op(Op::Equal),
             TokenKind::Greater => self.emit_op(Op::Greater),
-            TokenKind::GreaterEqual => self.emit_bytes(Op::Less as u8, Op::Not as u8),
+            TokenKind::GreaterEqual => self.emit_ops(Op::Less, Op::Not),
             TokenKind::Less => self.emit_op(Op::Less),
-            TokenKind::LessEqual => self.emit_bytes(Op::Greater as u8, Op::Not as u8),
+            TokenKind::LessEqual => self.emit_ops(Op::Greater, Op::Not),
             TokenKind::Plus => self.emit_op(Op::Add),
             TokenKind::Minus => self.emit_op(Op::Subtract),
             TokenKind::Star => self.emit_op(Op::Multiply),
@@ -674,7 +682,7 @@ impl<'a> CompilerWrapper<'a> {
             self.expression_statement();
         }
 
-        let mut loop_start = self.with_current_chunk_mut(|chunk| chunk.code.len());
+        let mut loop_start = self.with_current_chunk(|chunk| chunk.code.len());
         let mut exit_jump = None;
 
         if !self.match_current(TokenKind::Semicolon) {
@@ -687,7 +695,7 @@ impl<'a> CompilerWrapper<'a> {
 
         if !self.match_current(TokenKind::RightParen) {
             let body_jump = self.emit_jump(Op::Jump);
-            let increment_start = self.with_current_chunk_mut(|chunk| chunk.code.len());
+            let increment_start = self.with_current_chunk(|chunk| chunk.code.len());
             self.expression();
             self.emit_op(Op::Pop);
             self.consume(TokenKind::RightParen, "Expect ')' after for clauses.");
@@ -748,7 +756,7 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn while_statement(&mut self) {
-        let loop_start = self.with_current_chunk_mut(|chunk| chunk.code.len());
+        let loop_start = self.with_current_chunk(|chunk| chunk.code.len());
         self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.");
         self.expression();
         self.consume(TokenKind::RightParen, "Expect ')' after condition.");
@@ -823,9 +831,8 @@ impl<'a> CompilerWrapper<'a> {
         let function = current.function;
         {
             #![cfg(feature = "trace-execution")]
-            let name = function.name.as_str().string;
             if !self.parser.had_error {
-                function.chunk.disassemble(name);
+                function.chunk.disassemble(function.get_name());
             }
         }
         self.current = std::mem::take(&mut current.enclosing);
