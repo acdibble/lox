@@ -13,19 +13,18 @@ fn with_vm<T, F: FnOnce(&mut VM) -> T>(f: F) -> T {
     STATIC_VM.with(|vm| f(&mut *vm.borrow_mut()))
 }
 
+#[derive(Default)]
 struct CallFrame {
-    function: Function,
+    function: Option<Function>,
     ip: usize,
     starts_at: usize,
 }
 
 impl CallFrame {
-    fn new(function: Function, starts_at: usize) -> CallFrame {
-        CallFrame {
-            function,
-            starts_at,
-            ip: 0,
-        }
+    pub fn reset(&mut self) {
+        self.function = None;
+        self.starts_at = 0;
+        self.ip = 0;
     }
 }
 
@@ -36,12 +35,23 @@ pub enum InterpretError {
     InternalError(&'static str),
 }
 
-#[derive(Default)]
+const CALL_FRAME_MAX: usize = 64;
+const CALL_FRAME_DEFAULT: CallFrame = CallFrame {
+    function: None,
+    ip: 0,
+    starts_at: 0,
+};
+const STACK_MAX: usize = 256;
+const STACK_DEFAULT: Value = Value::Nil;
+
 pub struct VM {
-    stack: Vec<Value>,
     globals: HashMap<&'static str, Value>,
 
-    frames: Vec<CallFrame>,
+    stack: [Value; STACK_MAX],
+    stack_count: usize,
+
+    frames: [CallFrame; CALL_FRAME_MAX],
+    frame_count: usize,
 }
 
 type Result<T> = std::result::Result<T, InterpretError>;
@@ -49,7 +59,7 @@ type Result<T> = std::result::Result<T, InterpretError>;
 pub fn interpret(source: &String) -> Result<()> {
     with_vm(|vm| {
         let function = compile(source)?;
-        vm.stack.push(Value::Function(function.clone()));
+        vm.push(Value::Function(function.clone()));
         vm.call(function, 0).ok();
         vm.run()
     })
@@ -57,7 +67,15 @@ pub fn interpret(source: &String) -> Result<()> {
 
 impl VM {
     pub fn new() -> VM {
-        let mut vm: VM = Default::default();
+        let mut vm: VM = VM {
+            globals: Default::default(),
+
+            stack_count: Default::default(),
+            stack: [STACK_DEFAULT; STACK_MAX],
+
+            frame_count: Default::default(),
+            frames: [CALL_FRAME_DEFAULT; CALL_FRAME_MAX],
+        };
 
         vm.define_native("clock", native::clock);
 
@@ -65,33 +83,39 @@ impl VM {
     }
 
     fn reset_stack(&mut self) {
-        self.stack.clear();
-        self.frames.clear()
+        self.stack_count = 0;
+        for frame in self.frames.iter_mut() {
+            frame.reset();
+        }
     }
 
     #[inline(always)]
     fn current_frame(&self) -> &CallFrame {
-        self.frames.last().unwrap()
+        &self.frames[self.frame_count - 1]
     }
 
     #[inline(always)]
     fn current_frame_mut(&mut self) -> &mut CallFrame {
-        self.frames.last_mut().unwrap()
+        &mut self.frames[self.frame_count - 1]
     }
 
     #[inline(always)]
     fn current_chunk(&self) -> &Chunk {
-        &self.current_frame().function.chunk
+        &self.current_frame().function.as_ref().unwrap().chunk
     }
 
     fn runtime_error<'a>(&mut self, string: &'a str) -> Result<()> {
         eprintln!("{}", string);
 
-        for frame in self.frames.iter().rev() {
-            let function = &frame.function;
+        for frame in self.frames[0..self.frame_count].iter().rev() {
+            let function = &frame.function.as_ref().unwrap();
             let line = function.chunk.lines[frame.ip - 1];
 
-            eprintln!("[line {}] in {}()", line, function.get_name());
+            eprint!("[line {}] in ", line);
+            match function.get_name() {
+                "script" => eprintln!("script"),
+                name => eprintln!("{}()", name),
+            }
         }
         self.reset_stack();
         Err(InterpretError::RuntimeError)
@@ -103,21 +127,23 @@ impl VM {
 
     #[inline(always)]
     fn push(&mut self, value: Value) {
-        self.stack.push(value)
+        self.stack[self.stack_count] = value;
+        self.stack_count += 1;
     }
 
     #[inline(always)]
     fn pop(&mut self) -> Result<Value> {
-        match self.stack.pop() {
-            Some(value) => Ok(value),
-            _ => Err(InterpretError::InternalError("Can't pop on empty stack.")),
+        if self.stack_count == 0 {
+            return Err(InterpretError::InternalError("Can't pop on empty stack."));
         }
+
+        self.stack_count -= 1;
+        Ok(self.stack[self.stack_count].clone())
     }
 
     #[inline(always)]
     fn peek(&self, index: usize) -> Result<&Value> {
-        let len = self.stack.len();
-        match self.stack.get(len - 1 - index) {
+        match self.stack.get(self.stack_count - 1 - index) {
             Some(value) => Ok(value),
             None => Err(InterpretError::InternalError("Can't peek on empty stack.")),
         }
@@ -135,17 +161,26 @@ impl VM {
             );
         }
 
-        let starts_at = self.stack.len() - arg_count - 1;
-        self.frames.push(CallFrame::new(function, starts_at));
+        let starts_at = self.stack_count - arg_count - 1;
+        let frame = &mut self.frames[self.frame_count];
+        frame.starts_at = starts_at;
+        frame.function = Some(function);
+        frame.ip = 0;
+        self.frame_count += 1;
+
+        if self.frame_count == STACK_MAX {
+            return self.runtime_error("Stack overflow.");
+        }
+
         Ok(())
     }
 
     #[inline(always)]
     fn call_native(&mut self, function: native::Function, arg_count: usize) -> Result<()> {
-        let arg_start = self.stack.len() - arg_count - 1;
+        let arg_start = self.stack_count - arg_count - 1;
         let result = function(&self.stack[arg_start..]);
-        self.stack.truncate(arg_start);
-        self.stack.push(result);
+        self.stack_count -= arg_count;
+        self.stack[self.stack_count - 1] = result;
         Ok(())
     }
 
@@ -218,9 +253,9 @@ impl VM {
             {
                 #![cfg(feature = "trace-execution")]
                 print!("          ");
-                for value in self.stack.iter() {
+                for i in 0..self.stack_count {
                     print!("[ ");
-                    value.print();
+                    self.stack[i].print();
                     print!(" ]");
                 }
                 println!("");
@@ -353,13 +388,13 @@ impl VM {
                 }
                 Op::Return => {
                     let result = self.pop()?;
-                    let frame = self.frames.pop().unwrap();
-                    if self.frames.len() == 0 {
+                    self.frame_count -= 1;
+                    if self.frame_count == 0 {
                         self.pop()?;
                         return Ok(());
                     }
 
-                    self.stack.truncate(frame.starts_at);
+                    self.stack_count = self.frames[self.frame_count].starts_at;
                     self.push(result)
                 }
             }
