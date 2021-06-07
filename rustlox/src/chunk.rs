@@ -15,6 +15,8 @@ pub enum Op {
     GetGlobal,
     DefineGlobal,
     SetGlobal,
+    GetUpvalue,
+    SetUpvalue,
     Equal,
     Greater,
     Less,
@@ -29,6 +31,7 @@ pub enum Op {
     JumpIfFalse,
     Loop,
     Call,
+    Closure,
     Return,
 }
 
@@ -47,6 +50,8 @@ impl TryFrom<u8> for Op {
             x if x == Op::GetGlobal as u8 => Ok(Op::GetGlobal),
             x if x == Op::DefineGlobal as u8 => Ok(Op::DefineGlobal),
             x if x == Op::SetGlobal as u8 => Ok(Op::SetGlobal),
+            x if x == Op::GetUpvalue as u8 => Ok(Op::GetUpvalue),
+            x if x == Op::SetUpvalue as u8 => Ok(Op::SetUpvalue),
             x if x == Op::Equal as u8 => Ok(Op::Equal),
             x if x == Op::Greater as u8 => Ok(Op::Greater),
             x if x == Op::Less as u8 => Ok(Op::Less),
@@ -61,6 +66,7 @@ impl TryFrom<u8> for Op {
             x if x == Op::JumpIfFalse as u8 => Ok(Op::JumpIfFalse),
             x if x == Op::Loop as u8 => Ok(Op::Loop),
             x if x == Op::Call as u8 => Ok(Op::Call),
+            x if x == Op::Closure as u8 => Ok(Op::Closure),
             x if x == Op::Return as u8 => Ok(Op::Return),
             _ => {
                 if v < Op::Return as u8 {
@@ -142,6 +148,8 @@ impl Chunk {
             Ok(Op::GetGlobal) => self.constant_instruction("OP_GET_GLOBAL", offset),
             Ok(Op::DefineGlobal) => self.constant_instruction("OP_DEFINE_GLOBAL", offset),
             Ok(Op::SetGlobal) => self.constant_instruction("OP_SET_GLOBAL", offset),
+            Ok(Op::GetUpvalue) => self.byte_instruction("OP_GET_UPVALUE", offset),
+            Ok(Op::SetUpvalue) => self.byte_instruction("OP_SET_UPVALUE", offset),
             Ok(Op::Equal) => self.simple_instruction("OP_EQUAL", offset),
             Ok(Op::Greater) => self.simple_instruction("OP_GREATER", offset),
             Ok(Op::Less) => self.simple_instruction("OP_LESS", offset),
@@ -156,6 +164,32 @@ impl Chunk {
             Ok(Op::JumpIfFalse) => self.jump_instruction("OP_JUMP_IF_FALSE", 1, offset),
             Ok(Op::Loop) => self.jump_instruction("OP_LOOP", -1, offset),
             Ok(Op::Call) => self.byte_instruction("OP_CALL", offset),
+            Ok(Op::Closure) => {
+                let mut offset = offset + 1;
+                let constant = self.code[offset];
+                offset += 1;
+                print!("{:16} {:4} ", "OP_CLOSURE", constant);
+                self.constants[constant as usize].println();
+
+                let function = match &self.constants[constant as usize] {
+                    Value::Function(fun) => fun,
+                    _ => panic!("Expected function."),
+                };
+                for _ in 0..function.upvalue_count {
+                    let is_local = self.code[offset];
+                    offset += 1;
+                    let index = self.code[offset];
+                    offset += 1;
+                    println!(
+                        "{:04}      |                     {} {}",
+                        offset - 2,
+                        if is_local == 1 { "local" } else { "upvalue" },
+                        index
+                    );
+                }
+
+                return offset;
+            }
             Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
             Err(v) => {
                 println!("Unknown opcode {}", v);

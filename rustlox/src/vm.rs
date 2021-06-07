@@ -15,14 +15,14 @@ fn with_vm<T, F: FnOnce(&mut VM) -> T>(f: F) -> T {
 
 #[derive(Default)]
 struct CallFrame {
-    function: Option<Function>,
+    closure: Option<Closure>,
     ip: usize,
     starts_at: usize,
 }
 
 impl CallFrame {
     pub fn reset(&mut self) {
-        self.function = None;
+        self.closure = None;
         self.starts_at = 0;
         self.ip = 0;
     }
@@ -37,7 +37,7 @@ pub enum InterpretError {
 
 const CALL_FRAME_MAX: usize = 64;
 const CALL_FRAME_DEFAULT: CallFrame = CallFrame {
-    function: None,
+    closure: None,
     ip: 0,
     starts_at: 0,
 };
@@ -58,9 +58,9 @@ type Result<T> = std::result::Result<T, InterpretError>;
 
 pub fn interpret(source: &String) -> Result<()> {
     with_vm(|vm| {
-        let function = compile(source)?;
-        vm.push(Value::Function(function.clone()));
-        vm.call(function, 0).ok();
+        let closure = Closure::new(compile(source)?);
+        vm.push(Value::Closure(closure.clone()));
+        vm.call(closure, 0).ok();
         vm.run()
     })
 }
@@ -101,14 +101,20 @@ impl VM {
 
     #[inline(always)]
     fn current_chunk(&self) -> &Chunk {
-        &self.current_frame().function.as_ref().unwrap().chunk
+        &self
+            .current_frame()
+            .closure
+            .as_ref()
+            .unwrap()
+            .function
+            .chunk
     }
 
     fn runtime_error<'a>(&mut self, string: &'a str) -> Result<()> {
         eprintln!("{}", string);
 
         for frame in self.frames[0..self.frame_count].iter().rev() {
-            let function = &frame.function.as_ref().unwrap();
+            let function = &frame.closure.as_ref().unwrap().function;
             let line = function.chunk.lines[frame.ip - 1];
 
             eprint!("[line {}] in ", line);
@@ -150,12 +156,12 @@ impl VM {
     }
 
     #[inline(always)]
-    fn call(&mut self, function: Function, arg_count: usize) -> Result<()> {
-        if arg_count != function.arity {
+    fn call(&mut self, closure: Closure, arg_count: usize) -> Result<()> {
+        if arg_count != closure.function.arity {
             return self.runtime_error(
                 format!(
                     "Expected {} arguments but got {}.",
-                    function.arity, arg_count
+                    closure.function.arity, arg_count
                 )
                 .as_str(),
             );
@@ -164,7 +170,7 @@ impl VM {
         let starts_at = self.stack_count - arg_count - 1;
         let frame = &mut self.frames[self.frame_count];
         frame.starts_at = starts_at;
-        frame.function = Some(function);
+        frame.closure = Some(closure);
         frame.ip = 0;
         self.frame_count += 1;
 
@@ -187,9 +193,15 @@ impl VM {
     #[inline(always)]
     fn call_value(&mut self, callee: Value, arg_count: usize) -> Result<()> {
         match callee {
-            Value::Function(function) => self.call(function, arg_count),
+            Value::Closure(closure) => self.call(closure, arg_count),
             Value::Native(function) => self.call_native(function, arg_count),
             _ => self.runtime_error("Can only call functions and classes."),
+        }
+    }
+
+    fn capture_upvalue(&self, location: usize) -> Upvalue {
+        Upvalue {
+            location: &self.stack[location],
         }
     }
 
@@ -324,6 +336,18 @@ impl VM {
                         return self.runtime_error(error.as_str());
                     }
                 }
+                Op::GetUpvalue => {
+                    let slot = read_u8!()? as usize;
+                    self.push(unsafe {
+                        (*self.current_frame().closure.as_ref().unwrap().upvalues[slot].location)
+                            .clone()
+                    })
+                }
+                Op::SetUpvalue => {
+                    let slot = read_u8!()? as usize;
+                    self.current_frame_mut().closure.as_mut().unwrap().upvalues[slot].location =
+                        self.peek(0)?;
+                }
                 Op::Equal => {
                     let b = self.pop();
                     let a = self.pop();
@@ -385,6 +409,30 @@ impl VM {
                     let arg_count = read_u8!()? as usize;
                     let callee = self.peek(arg_count)?.clone();
                     self.call_value(callee, arg_count)?;
+                }
+                Op::Closure => {
+                    let fun = match read_constant!()? {
+                        Value::Function(fun) => Ok(fun.clone()),
+                        _ => Err(InterpretError::InternalError(
+                            "Expected function for closure",
+                        )),
+                    }?;
+                    let upvalue_count = fun.upvalue_count;
+                    let mut closure = Closure::new(fun);
+                    let offset = self.current_frame().starts_at;
+                    for i in 0..upvalue_count {
+                        let is_local = read_u8!()?;
+                        let index = read_u8!()? as usize;
+                        if is_local == 1 {
+                            let upvalue = self.capture_upvalue(offset + index);
+                            closure.upvalues.push(upvalue);
+                        } else {
+                            let upvalue =
+                                self.current_frame().closure.as_ref().unwrap().upvalues[i];
+                            closure.upvalues.push(upvalue)
+                        }
+                    }
+                    self.push(Value::Closure(closure));
                 }
                 Op::Return => {
                     let result = self.pop()?;

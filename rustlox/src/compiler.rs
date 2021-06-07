@@ -62,6 +62,12 @@ struct Local<'a> {
     depth: Option<usize>,
 }
 
+#[derive(Copy, Clone)]
+struct Upvalue {
+    index: u8,
+    is_local: bool,
+}
+
 #[derive(PartialEq)]
 enum FunctionKind {
     Function,
@@ -75,6 +81,7 @@ struct Compiler<'a> {
 
     locals: Vec<Local<'a>>,
     scope_depth: usize,
+    upvalues: Vec<Upvalue>,
 }
 
 impl<'a> Compiler<'a> {
@@ -90,13 +97,80 @@ impl<'a> Compiler<'a> {
                 arity: 0,
                 chunk: Rc::new(Chunk::new()),
                 name: string::Handle::from_str(name),
+                upvalue_count: 0,
             },
             scope_depth: 0,
             locals: vec![Local {
                 depth: Some(0),
                 name: "",
             }],
+            upvalues: Default::default(),
         }
+    }
+}
+
+impl<'a> Compiler<'a> {
+    fn with_enclosing<T, F: FnOnce(&Compiler) -> T>(&self, f: F) -> T {
+        let enclosing = self.enclosing.as_ref().unwrap().borrow();
+        f(&enclosing)
+    }
+
+    fn with_enclosing_mut<T, F: FnOnce(&mut Compiler) -> T>(&self, f: F) -> T {
+        let mut enclosing = self.enclosing.as_ref().unwrap().borrow_mut();
+        f(&mut enclosing)
+    }
+
+    fn resolve_local(&self, name: &str) -> (Option<u8>, Option<&'static str>) {
+        for (i, local) in self.locals.iter().enumerate().rev() {
+            if local.name == name {
+                if local.depth.is_none() {
+                    return (
+                        Some(i as u8),
+                        Some("Can't read local variable in its own initializer."),
+                    );
+                }
+                return (Some(i as u8), None);
+            }
+        }
+
+        (None, None)
+    }
+
+    fn add_upvalue(&mut self, index: u8, is_local: bool) -> Result<u8, &'static str> {
+        for (index, upvalue) in self.upvalues.iter().enumerate() {
+            if upvalue.index as usize == index && upvalue.is_local == is_local {
+                return Ok(upvalue.index);
+            }
+        }
+
+        self.upvalues.push(Upvalue { is_local, index });
+        self.function.upvalue_count += 1;
+        match (self.upvalues.len() - 1).try_into() {
+            Ok(value) => Ok(value),
+            _ => Err("Too many closure variables in function."),
+        }
+    }
+
+    fn resolve_upvalue(&mut self, name: &str) -> (Option<u8>, Option<&'static str>) {
+        if self.enclosing.is_none() {
+            return (None, None);
+        }
+
+        if let (Some(local), err) = self.with_enclosing(|c| c.resolve_local(name)) {
+            return match self.add_upvalue(local, true) {
+                Ok(value) => (Some(value), err),
+                Err(message) => (Some(0), Some(message)),
+            };
+        }
+
+        if let (Some(value), err) = self.with_enclosing_mut(|c| c.resolve_upvalue(name)) {
+            return match self.add_upvalue(value, false) {
+                Ok(value) => (Some(value), err),
+                Err(message) => (Some(0), Some(message)),
+            };
+        }
+
+        (None, None)
     }
 }
 
@@ -160,6 +234,11 @@ impl<'a> CompilerWrapper<'a> {
     fn with_current_function_mut<T, F: FnOnce(&mut Function) -> T>(&mut self, f: F) -> T {
         let mut current = self.current.as_ref().unwrap().borrow_mut();
         f(&mut current.function)
+    }
+
+    fn with_current<T, F: FnOnce(&Compiler) -> T>(&self, f: F) -> T {
+        let current = self.current.as_ref().unwrap().borrow();
+        f(&current)
     }
 
     fn with_current_mut<T, F: FnOnce(&mut Compiler) -> T>(&mut self, f: F) -> T {
@@ -386,17 +465,24 @@ impl<'a> CompilerWrapper<'a> {
         let get_op: Op;
         let set_op: Op;
 
-        let arg = match self.resolve_local(name) {
-            Some(arg) => {
-                get_op = Op::GetLocal;
-                set_op = Op::SetLocal;
-                arg
+        let arg = if let (Some(arg), err) = self.with_current(|c| c.resolve_local(name)) {
+            get_op = Op::GetLocal;
+            set_op = Op::SetLocal;
+            if let Some(message) = err {
+                self.error(message)
             }
-            _ => {
-                get_op = Op::GetGlobal;
-                set_op = Op::SetGlobal;
-                self.identifier_constant(name)
+            arg
+        } else if let (Some(arg), err) = self.with_current_mut(|c| c.resolve_upvalue(name)) {
+            get_op = Op::GetUpvalue;
+            set_op = Op::SetUpvalue;
+            if let Some(message) = err {
+                self.error(message)
             }
+            arg
+        } else {
+            get_op = Op::GetGlobal;
+            set_op = Op::SetGlobal;
+            self.identifier_constant(name)
         };
 
         if can_assign && self.match_current(TokenKind::Equal) {
@@ -474,21 +560,6 @@ impl<'a> CompilerWrapper<'a> {
 
     fn identifier_constant(&mut self, name: &str) -> u8 {
         self.make_constant(Value::String(string::Handle::from_str(name)))
-    }
-
-    fn resolve_local(&mut self, name: &str) -> Option<u8> {
-        let len = self.current.as_ref().unwrap().borrow().locals.len();
-        for i in 0..len {
-            let local = self.current.as_ref().unwrap().borrow().locals[i];
-            if local.name == name {
-                if local.depth.is_none() {
-                    self.error("Can't read local variable in its own initializer.");
-                }
-                return Some(i as u8);
-            }
-        }
-
-        None
     }
 
     fn add_local(&mut self, name: Token<'a>) {
@@ -638,9 +709,14 @@ impl<'a> CompilerWrapper<'a> {
         self.consume(TokenKind::LeftBrace, "Expect '{' before function body.");
         self.block();
 
-        let function = self.end_compiler();
-        let constant = self.make_constant(Value::Function(function));
-        self.emit_bytes(Op::Constant as u8, constant);
+        let compiler = self.end_compiler();
+        let constant = self.make_constant(Value::Function(compiler.function));
+        self.emit_bytes(Op::Closure as u8, constant);
+
+        for Upvalue { index, is_local } in compiler.upvalues {
+            self.emit_byte(if is_local { 1 } else { 0 });
+            self.emit_byte(index);
+        }
     }
 
     fn fun_declaration(&mut self) {
@@ -822,21 +898,21 @@ impl<'a> CompilerWrapper<'a> {
         }
     }
 
-    fn end_compiler(&mut self) -> Function {
+    fn end_compiler(&mut self) -> Compiler<'a> {
         self.emit_return();
-        let mut current = Rc::try_unwrap(std::mem::take(&mut self.current).unwrap())
+        let mut compiler = Rc::try_unwrap(std::mem::take(&mut self.current).unwrap())
             .ok()
             .unwrap()
             .into_inner();
-        let function = current.function;
         {
             #![cfg(feature = "trace-execution")]
+            let function = &compiler.function;
             if !self.parser.had_error {
                 function.chunk.disassemble(function.get_name());
             }
         }
-        self.current = std::mem::take(&mut current.enclosing);
-        function
+        self.current = std::mem::take(&mut compiler.enclosing);
+        compiler
     }
 
     fn begin_scope(&mut self) {
@@ -873,11 +949,11 @@ impl<'a> CompilerWrapper<'a> {
         }
 
         let had_error = self.parser.had_error;
-        let function = self.end_compiler();
+        let compiler = self.end_compiler();
         if had_error {
             Err(InterpretError::CompileError)
         } else {
-            Ok(function)
+            Ok(compiler.function)
         }
     }
 }
