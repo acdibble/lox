@@ -45,58 +45,26 @@ impl Closure {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum Location {
-    Stack(usize),
-    Here,
-}
-
-impl Location {
-    pub fn as_usize(&self) -> usize {
-        match self {
-            Location::Stack(index) => *index,
-            _ => panic!(),
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Upvalue {
-    location: Location,
+    pub location: *const Value,
     pub next: Option<Rc<RefCell<Upvalue>>>,
-    pub closed: Option<Value>,
+    pub closed: Value,
 }
 
 impl Upvalue {
-    pub fn new_closed(value: Value) -> Upvalue {
+    pub fn new(location: *const Value, next: Option<Rc<RefCell<Upvalue>>>) -> Upvalue {
         Upvalue {
-            location: Location::Here,
-            next: None,
-            closed: Some(value),
-        }
-    }
-
-    pub fn new_open(location: usize, next: Option<Rc<RefCell<Upvalue>>>) -> Upvalue {
-        Upvalue {
-            location: Location::Stack(location),
+            location,
             next,
-            closed: None,
+            closed: Value::Nil,
         }
     }
 
-    pub fn get_location(&self) -> usize {
-        match self.location {
-            Location::Stack(val) => val,
-            _ => 0,
-        }
-    }
-
-    pub fn set_location(&mut self, location: (usize, Value)) {
-        if self.location == Location::Here {
-            self.closed = Some(location.1.clone());
-        } else {
-            self.location = Location::Stack(location.0);
-        }
+    pub fn close(&mut self) {
+        unsafe { self.closed = (*self.location).clone() };
+        self.location = &self.closed;
+        self.next = None;
     }
 }
 

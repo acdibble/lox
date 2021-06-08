@@ -1,7 +1,7 @@
 var globalSet;
 var globalGet;
 
-fun main() {
+{
   var a = "initial";
 
   fun set() { a = "updated"; }
@@ -11,21 +11,6 @@ fun main() {
   globalGet = get;
 }
 
-main();
 globalGet();
 globalSet();
 globalGet();
-
-fun adder() {
-  var a = 1;
-  var b = 2;
-  var c = 3;
-
-  fun add() {
-    return a + b + c;
-  }
-
-  return add;
-}
-
-print adder()();

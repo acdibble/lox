@@ -204,11 +204,14 @@ impl VM {
         }
     }
 
-    fn capture_upvalue(&mut self, location: usize) -> Rc<RefCell<Upvalue>> {
+    #[inline(always)]
+    fn capture_upvalue(&mut self, location: *const Value) -> Rc<RefCell<Upvalue>> {
         let mut previous: Option<Rc<RefCell<Upvalue>>> = None;
         let mut current: &mut Option<Rc<RefCell<Upvalue>>> = &mut self.open_upvalues;
         let mut _temp: Option<Rc<RefCell<Upvalue>>> = None;
-        while current.is_some() && current.as_ref().unwrap().borrow().get_location() > location {
+        while current.is_some()
+            && current.as_ref().unwrap().borrow().location as usize > location as usize
+        {
             previous = Some(Rc::clone(&current.as_ref().unwrap()));
             _temp = if let Some(value) = &previous.as_ref().unwrap().borrow().next {
                 Some(Rc::clone(value))
@@ -220,12 +223,12 @@ impl VM {
 
         if let Some(value) = current {
             let upvalue = value.borrow();
-            if upvalue.get_location() == location {
+            if upvalue.location as usize == location as usize {
                 return Rc::clone(&value);
             }
         }
 
-        let created_upvalue = Rc::new(RefCell::new(Upvalue::new_open(
+        let created_upvalue = Rc::new(RefCell::new(Upvalue::new(
             location,
             match current {
                 Some(value) => Some(Rc::clone(value)),
@@ -242,19 +245,19 @@ impl VM {
         created_upvalue
     }
 
-    fn close_upvalues(&mut self, last: usize) {
+    #[inline(always)]
+    fn close_upvalues(&mut self, last: *const Value) {
         while self.open_upvalues.is_some()
-            && self.open_upvalues.as_ref().unwrap().borrow().get_location() >= last
+            && self.open_upvalues.as_ref().unwrap().borrow().location as usize >= last as usize
         {
             let rc = self.open_upvalues.as_ref().unwrap();
-            let upvalue = rc.borrow();
-            let index = upvalue.get_location();
+            let mut upvalue = rc.borrow_mut();
             let next = match &upvalue.next {
                 Some(value) => Some(Rc::clone(value)),
                 None => None,
             };
+            upvalue.close();
             drop(upvalue);
-            rc.replace(Upvalue::new_closed(self.stack[index].clone()));
             self.open_upvalues = next;
         }
     }
@@ -387,21 +390,20 @@ impl VM {
                 }
                 Op::GetUpvalue => {
                     let slot = read_u8!()? as usize;
-                    let upvalue =
-                        self.current_frame().closure.as_ref().unwrap().upvalues[slot].borrow();
-                    let value = match upvalue.get_location() {
-                        0 => upvalue.closed.as_ref().unwrap().clone(),
-                        index => self.stack[index].clone(),
-                    };
-                    drop(upvalue);
+                    let value = self.current_frame().closure.as_ref().unwrap().upvalues[slot]
+                        .borrow()
+                        .closed
+                        .clone();
                     self.push(value)
                 }
                 Op::SetUpvalue => {
                     let slot = read_u8!()? as usize;
-                    let location = (self.stack_count - 1, self.peek(0)?.clone());
-                    self.current_frame_mut().closure.as_mut().unwrap().upvalues[slot]
-                        .borrow_mut()
-                        .set_location(location);
+                    let value = self.peek(0)?.clone();
+                    let mut upvalue = self.current_frame_mut().closure.as_mut().unwrap().upvalues
+                        [slot]
+                        .borrow_mut();
+
+                    upvalue.closed = value;
                 }
                 Op::Equal => {
                     let b = self.pop();
@@ -431,13 +433,12 @@ impl VM {
                     self.push(Value::Bool(value))
                 }
                 Op::Negate => {
-                    let num = match self.peek(0)? {
-                        Value::Number(num) => *num,
+                    let num = match self.pop()? {
+                        Value::Number(num) => num,
                         _ => {
                             return self.runtime_error("Operand must be a number.");
                         }
                     };
-                    self.pop()?;
                     self.push(Value::Number(-num))
                 }
                 Op::Print => {
@@ -479,7 +480,7 @@ impl VM {
                         let is_local = read_u8!()?;
                         let index = read_u8!()? as usize;
                         let upvalue = if is_local == 1 {
-                            self.capture_upvalue(offset + index)
+                            self.capture_upvalue(&self.stack[offset + index])
                         } else {
                             self.current_frame().closure.as_ref().unwrap().upvalues[i].clone()
                         };
@@ -488,13 +489,13 @@ impl VM {
                     self.push(Value::Closure(closure));
                 }
                 Op::CloseUpvalue => {
-                    self.close_upvalues(self.stack_count - 1);
+                    self.close_upvalues(&self.stack[self.stack_count - 1]);
                     self.pop()?;
                 }
                 Op::Return => {
                     let result = self.pop()?;
                     let starts_at = self.current_frame().starts_at;
-                    self.close_upvalues(starts_at);
+                    self.close_upvalues(&self.stack[starts_at]);
                     self.frame_count -= 1;
                     if self.frame_count == 0 {
                         self.pop()?;
