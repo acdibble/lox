@@ -5,6 +5,7 @@ use crate::value::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::rc::Rc;
 
 fn with_vm<T, F: FnOnce(&mut VM) -> T>(f: F) -> T {
     thread_local!(static STATIC_VM: RefCell<VM> = {
@@ -52,6 +53,8 @@ pub struct VM {
 
     frames: [CallFrame; CALL_FRAME_MAX],
     frame_count: usize,
+
+    open_upvalues: Option<Rc<RefCell<Upvalue>>>,
 }
 
 type Result<T> = std::result::Result<T, InterpretError>;
@@ -75,6 +78,8 @@ impl VM {
 
             frame_count: Default::default(),
             frames: [CALL_FRAME_DEFAULT; CALL_FRAME_MAX],
+
+            open_upvalues: Default::default(),
         };
 
         vm.define_native("clock", native::clock);
@@ -199,9 +204,58 @@ impl VM {
         }
     }
 
-    fn capture_upvalue(&self, location: usize) -> Upvalue {
-        Upvalue {
-            location: &self.stack[location],
+    fn capture_upvalue(&mut self, location: usize) -> Rc<RefCell<Upvalue>> {
+        let mut previous: Option<Rc<RefCell<Upvalue>>> = None;
+        let mut current: &mut Option<Rc<RefCell<Upvalue>>> = &mut self.open_upvalues;
+        let mut _temp: Option<Rc<RefCell<Upvalue>>> = None;
+        while current.is_some() && current.as_ref().unwrap().borrow().get_location() > location {
+            previous = Some(Rc::clone(&current.as_ref().unwrap()));
+            _temp = if let Some(value) = &previous.as_ref().unwrap().borrow().next {
+                Some(Rc::clone(value))
+            } else {
+                None
+            };
+            current = &mut _temp;
+        }
+
+        if let Some(value) = current {
+            let upvalue = value.borrow();
+            if upvalue.get_location() == location {
+                return Rc::clone(&value);
+            }
+        }
+
+        let created_upvalue = Rc::new(RefCell::new(Upvalue::new_open(
+            location,
+            match current {
+                Some(value) => Some(Rc::clone(value)),
+                None => None,
+            },
+        )));
+
+        if previous.is_none() {
+            self.open_upvalues = Some(Rc::clone(&created_upvalue));
+        } else {
+            previous.as_mut().unwrap().borrow_mut().next = Some(Rc::clone(&created_upvalue));
+        }
+
+        created_upvalue
+    }
+
+    fn close_upvalues(&mut self, last: usize) {
+        while self.open_upvalues.is_some()
+            && self.open_upvalues.as_ref().unwrap().borrow().get_location() >= last
+        {
+            let rc = self.open_upvalues.as_ref().unwrap();
+            let upvalue = rc.borrow();
+            let index = upvalue.get_location();
+            let next = match &upvalue.next {
+                Some(value) => Some(Rc::clone(value)),
+                None => None,
+            };
+            drop(upvalue);
+            rc.replace(Upvalue::new_closed(self.stack[index].clone()));
+            self.open_upvalues = next;
         }
     }
 
@@ -285,13 +339,8 @@ impl VM {
 
             match instruction {
                 Op::Constant => {
-                    let constant = read_constant!()?;
-                    {
-                        #![cfg(feature = "trace-execution")]
-                        constant.println();
-                    }
-                    let clone = constant.clone();
-                    self.push(clone);
+                    let constant = read_constant!()?.clone();
+                    self.push(constant);
                 }
                 Op::Nil => self.push(Value::Nil),
                 Op::True => self.push(Value::Bool(true)),
@@ -338,15 +387,21 @@ impl VM {
                 }
                 Op::GetUpvalue => {
                     let slot = read_u8!()? as usize;
-                    self.push(unsafe {
-                        (*self.current_frame().closure.as_ref().unwrap().upvalues[slot].location)
-                            .clone()
-                    })
+                    let upvalue =
+                        self.current_frame().closure.as_ref().unwrap().upvalues[slot].borrow();
+                    let value = match upvalue.get_location() {
+                        0 => upvalue.closed.as_ref().unwrap().clone(),
+                        index => self.stack[index].clone(),
+                    };
+                    drop(upvalue);
+                    self.push(value)
                 }
                 Op::SetUpvalue => {
                     let slot = read_u8!()? as usize;
-                    self.current_frame_mut().closure.as_mut().unwrap().upvalues[slot].location =
-                        self.peek(0)?;
+                    let location = (self.stack_count - 1, self.peek(0)?.clone());
+                    self.current_frame_mut().closure.as_mut().unwrap().upvalues[slot]
+                        .borrow_mut()
+                        .set_location(location);
                 }
                 Op::Equal => {
                     let b = self.pop();
@@ -423,26 +478,30 @@ impl VM {
                     for i in 0..upvalue_count {
                         let is_local = read_u8!()?;
                         let index = read_u8!()? as usize;
-                        if is_local == 1 {
-                            let upvalue = self.capture_upvalue(offset + index);
-                            closure.upvalues.push(upvalue);
+                        let upvalue = if is_local == 1 {
+                            self.capture_upvalue(offset + index)
                         } else {
-                            let upvalue =
-                                self.current_frame().closure.as_ref().unwrap().upvalues[i];
-                            closure.upvalues.push(upvalue)
-                        }
+                            self.current_frame().closure.as_ref().unwrap().upvalues[i].clone()
+                        };
+                        closure.upvalues.push(upvalue)
                     }
                     self.push(Value::Closure(closure));
                 }
+                Op::CloseUpvalue => {
+                    self.close_upvalues(self.stack_count - 1);
+                    self.pop()?;
+                }
                 Op::Return => {
                     let result = self.pop()?;
+                    let starts_at = self.current_frame().starts_at;
+                    self.close_upvalues(starts_at);
                     self.frame_count -= 1;
                     if self.frame_count == 0 {
                         self.pop()?;
                         return Ok(());
                     }
 
-                    self.stack_count = self.frames[self.frame_count].starts_at;
+                    self.stack_count = starts_at;
                     self.push(result)
                 }
             }

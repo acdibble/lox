@@ -1,6 +1,7 @@
 use crate::chunk::Chunk;
 use crate::native;
 use crate::string;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Clone)]
@@ -30,7 +31,7 @@ impl Function {
 #[derive(Clone)]
 pub struct Closure {
     pub function: Function,
-    pub upvalues: Vec<Upvalue>,
+    pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
     pub upvalue_count: usize,
 }
 
@@ -44,9 +45,59 @@ impl Closure {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Location {
+    Stack(usize),
+    Here,
+}
+
+impl Location {
+    pub fn as_usize(&self) -> usize {
+        match self {
+            Location::Stack(index) => *index,
+            _ => panic!(),
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Upvalue {
-    pub location: *const Value,
+    location: Location,
+    pub next: Option<Rc<RefCell<Upvalue>>>,
+    pub closed: Option<Value>,
+}
+
+impl Upvalue {
+    pub fn new_closed(value: Value) -> Upvalue {
+        Upvalue {
+            location: Location::Here,
+            next: None,
+            closed: Some(value),
+        }
+    }
+
+    pub fn new_open(location: usize, next: Option<Rc<RefCell<Upvalue>>>) -> Upvalue {
+        Upvalue {
+            location: Location::Stack(location),
+            next,
+            closed: None,
+        }
+    }
+
+    pub fn get_location(&self) -> usize {
+        match self.location {
+            Location::Stack(val) => val,
+            _ => 0,
+        }
+    }
+
+    pub fn set_location(&mut self, location: (usize, Value)) {
+        if self.location == Location::Here {
+            self.closed = Some(location.1.clone());
+        } else {
+            self.location = Location::Stack(location.0);
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -58,7 +109,6 @@ pub enum Value {
     Function(Function),
     Native(native::Function),
     Closure(Closure),
-    Upvalue(Upvalue),
 }
 
 impl PartialEq for Value {
@@ -91,7 +141,6 @@ impl Value {
             Value::Function(function) => function.print(),
             Value::Native(_) => print!("<native fn>"),
             Value::Closure(closure) => closure.function.print(),
-            Value::Upvalue(_) => print!("upvalue"),
             Value::Nil => print!("nil"),
         }
     }

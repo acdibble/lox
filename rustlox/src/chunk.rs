@@ -32,6 +32,7 @@ pub enum Op {
     Loop,
     Call,
     Closure,
+    CloseUpvalue,
     Return,
 }
 
@@ -67,6 +68,7 @@ impl TryFrom<u8> for Op {
             x if x == Op::Loop as u8 => Ok(Op::Loop),
             x if x == Op::Call as u8 => Ok(Op::Call),
             x if x == Op::Closure as u8 => Ok(Op::Closure),
+            x if x == Op::CloseUpvalue as u8 => Ok(Op::CloseUpvalue),
             x if x == Op::Return as u8 => Ok(Op::Return),
             _ => {
                 if v < Op::Return as u8 {
@@ -190,6 +192,7 @@ impl Chunk {
 
                 return offset;
             }
+            Ok(Op::CloseUpvalue) => self.simple_instruction("OP_CLOSE_UPVALUE", offset),
             Ok(Op::Return) => self.simple_instruction("OP_RETURN", offset),
             Err(v) => {
                 println!("Unknown opcode {}", v);

@@ -60,6 +60,7 @@ struct Parser<'a> {
 struct Local<'a> {
     name: &'a str,
     depth: Option<usize>,
+    is_captured: bool,
 }
 
 #[derive(Copy, Clone)]
@@ -103,6 +104,7 @@ impl<'a> Compiler<'a> {
             locals: vec![Local {
                 depth: Some(0),
                 name: "",
+                is_captured: false,
             }],
             upvalues: Default::default(),
         }
@@ -157,6 +159,7 @@ impl<'a> Compiler<'a> {
         }
 
         if let (Some(local), err) = self.with_enclosing(|c| c.resolve_local(name)) {
+            self.with_enclosing_mut(|c| c.locals[local as usize].is_captured = true);
             return match self.add_upvalue(local, true) {
                 Ok(value) => (Some(value), err),
                 Err(message) => (Some(0), Some(message)),
@@ -576,6 +579,7 @@ impl<'a> CompilerWrapper<'a> {
             .push(Local {
                 name: name.lexeme,
                 depth: None,
+                is_captured: false,
             })
     }
 
@@ -920,24 +924,32 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn end_scope(&mut self) {
-        let pop_count = self.with_current_mut(|current| {
+        println!("end scope");
+        let ops = self.with_current_mut(|current| {
+            let mut ops: Vec<Op> = vec![];
             current.scope_depth -= 1;
 
-            let mut pop_count = 0;
+            println!("locals len: {}", current.locals.len());
             while let Some(local) = current.locals.last() {
                 if local.depth.unwrap() > current.scope_depth {
+                    ops.push(if local.is_captured {
+                        println!("is captured");
+                        Op::CloseUpvalue
+                    } else {
+                        println!("is not captured");
+                        Op::Pop
+                    });
                     current.locals.pop();
-                    pop_count += 1;
                 } else {
                     break;
                 }
             }
 
-            pop_count
+            ops
         });
 
-        for _ in 0..pop_count {
-            self.emit_op(Op::Pop);
+        for op in ops {
+            self.emit_op(op);
         }
     }
 
