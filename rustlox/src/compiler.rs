@@ -924,19 +924,15 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn end_scope(&mut self) {
-        println!("end scope");
         let ops = self.with_current_mut(|current| {
             let mut ops: Vec<Op> = vec![];
             current.scope_depth -= 1;
 
-            println!("locals len: {}", current.locals.len());
             while let Some(local) = current.locals.last() {
                 if local.depth.unwrap() > current.scope_depth {
                     ops.push(if local.is_captured {
-                        println!("is captured");
                         Op::CloseUpvalue
                     } else {
-                        println!("is not captured");
                         Op::Pop
                     });
                     current.locals.pop();

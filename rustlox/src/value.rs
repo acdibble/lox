@@ -15,14 +15,14 @@ pub struct Function {
 impl Function {
     pub fn get_name(&self) -> &'static str {
         match self.name.as_str().string {
-            "" => "script",
+            "" => "<script>",
             value => value,
         }
     }
 
     pub fn print(&self) {
         match self.get_name() {
-            "script" => print!("<script>"),
+            "<script>" => print!("<script>"),
             name => print!("<fn {}>", name),
         }
     }
