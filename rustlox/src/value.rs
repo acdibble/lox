@@ -4,7 +4,7 @@ use crate::string;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Function {
     pub arity: usize,
     pub chunk: Rc<Chunk>,
@@ -28,7 +28,7 @@ impl Function {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Closure {
     pub function: Function,
     pub upvalues: Vec<Rc<RefCell<Upvalue>>>,
@@ -45,11 +45,25 @@ impl Closure {
     }
 }
 
-#[derive(Clone)]
+impl Drop for Closure {
+    #![cfg(feature = "debug-drop")]
+    fn drop(&mut self) {
+        println!("cya!: {:?}", self.function.get_name());
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Upvalue {
     pub location: *const Value,
     pub next: Option<Rc<RefCell<Upvalue>>>,
     pub closed: Value,
+}
+
+impl Drop for Upvalue {
+    #![cfg(feature = "debug-drop")]
+    fn drop(&mut self) {
+        println!("cya!: {:?}", self.closed);
+    }
 }
 
 impl Upvalue {
@@ -77,6 +91,26 @@ pub enum Value {
     Function(Function),
     Native(native::Function),
     Closure(Closure),
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Value::Nil
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Value::Bool(value) => write!(f, "Value::Bool({})", value),
+            Value::Number(value) => write!(f, "Value::Number({})", value),
+            Value::Nil => write!(f, "Value::Nil"),
+            Value::String(value) => write!(f, "Value::String({})", value),
+            Value::Function(value) => write!(f, "Value::Function({:?})", value),
+            Value::Native(_) => write!(f, "Value::Native(<native fn>)"),
+            Value::Closure(value) => write!(f, "Value::Closure({:?})", value),
+        }
+    }
 }
 
 impl PartialEq for Value {

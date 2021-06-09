@@ -5,12 +5,15 @@ var globalGet;
   var a = "initial";
 
   fun set() { a = "updated"; }
-  fun get() { print a; }
+  fun get() { a; }
 
   globalSet = set;
   globalGet = get;
 }
 
+var start = clock();
+for (var i = 0; i < 1000000; i = i + 1) {
 globalGet();
 globalSet();
-globalGet();
+}
+print clock() - start;

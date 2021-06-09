@@ -88,7 +88,7 @@ impl TryFrom<&u8> for Op {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,

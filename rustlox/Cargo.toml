@@ -10,3 +10,4 @@ edition = "2018"
 
 [features]
 trace-execution = []
+debug-drop = []

@@ -149,7 +149,7 @@ impl VM {
         }
 
         self.stack_count -= 1;
-        Ok(self.stack[self.stack_count].clone())
+        Ok(std::mem::take(&mut self.stack[self.stack_count]))
     }
 
     #[inline(always)]
@@ -377,7 +377,7 @@ impl VM {
                 Op::DefineGlobal => {
                     let name = read_string!()?.as_str().string;
                     let value = self.pop()?;
-                    self.globals.insert(name, value.clone());
+                    self.globals.insert(name, value);
                 }
                 Op::SetGlobal => {
                     let name = read_string!()?;
@@ -406,8 +406,8 @@ impl VM {
                     upvalue.closed = value;
                 }
                 Op::Equal => {
-                    let b = self.pop();
-                    let a = self.pop();
+                    let b = self.pop()?;
+                    let a = self.pop()?;
                     self.push(Value::Bool(a == b));
                 }
                 Op::Greater => binary_op!(>, Bool),
