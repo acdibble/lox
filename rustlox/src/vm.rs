@@ -1,6 +1,7 @@
 use crate::chunk::*;
 use crate::compiler::*;
 use crate::native;
+use crate::string;
 use crate::value::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -262,47 +263,43 @@ impl VM {
         }
     }
 
+    #[inline(always)]
+    fn read_u8(&mut self) -> Result<u8> {
+        let frame = self.current_frame_mut();
+        let ip = frame.ip;
+        frame.ip += 1;
+        let chunk = self.current_chunk();
+        match chunk.code.get(ip) {
+            Some(byte) => Ok(*byte),
+            _ => return Err(InterpretError::InternalError("Failed to read byte.")),
+        }
+    }
+
+    #[inline(always)]
+    fn read_constant(&mut self) -> Result<&Value> {
+        let constant: usize = self.read_u8()?.into();
+        match self.current_chunk().constants.get(constant) {
+            Some(value) => Ok(value),
+            _ => return Err(InterpretError::InternalError("Failed to read constant.")),
+        }
+    }
+
+    #[inline(always)]
+    fn read_u16(&mut self) -> Result<u16> {
+        let byte1: u16 = self.read_u8()?.into();
+        let byte2: u16 = self.read_u8()?.into();
+        Ok((byte1 << 8) | byte2)
+    }
+
+    #[inline(always)]
+    fn read_string(&mut self) -> Result<&string::Handle> {
+        match self.read_constant()? {
+            Value::String(handle) => Ok(handle),
+            _ => return Err(InterpretError::InternalError("Value was not a string.")),
+        }
+    }
+
     fn run(&mut self) -> Result<()> {
-        macro_rules! read_u8 {
-            () => {{
-                let frame = self.current_frame_mut();
-                let ip = frame.ip;
-                frame.ip += 1;
-                let chunk = self.current_chunk();
-                match chunk.code.get(ip) {
-                    Some(byte) => Ok(*byte),
-                    _ => return Err(InterpretError::InternalError("Failed to read byte.")),
-                }
-            }};
-        }
-
-        macro_rules! read_constant {
-            () => {{
-                let constant: usize = read_u8!()?.into();
-                match self.current_chunk().constants.get(constant) {
-                    Some(value) => Ok(value),
-                    _ => return Err(InterpretError::InternalError("Failed to read constant.")),
-                }
-            }};
-        }
-
-        macro_rules! read_u16 {
-            () => {{
-                let byte1: u16 = read_u8!()?.into();
-                let byte2: u16 = read_u8!()?.into();
-                Ok((byte1 << 8) | byte2)
-            }};
-        }
-
-        macro_rules! read_string {
-            () => {
-                match read_constant!()? {
-                    Value::String(handle) => Ok(handle),
-                    _ => return Err(InterpretError::InternalError("Value was not a string.")),
-                }
-            };
-        }
-
         macro_rules! binary_op {
             ($op: tt, $variant: ident) => {{
                 let value = match (self.peek(0)?, self.peek(1)?) {
@@ -332,7 +329,7 @@ impl VM {
                 self.current_chunk().disassemble_instruction(ip);
             }
 
-            let instruction = match read_u8!()?.try_into() {
+            let instruction = match self.read_u8()?.try_into() {
                 Ok(op) => op,
                 Err(value) => {
                     let message = format!("Got unexpected instruction: '{}'", value);
@@ -342,7 +339,7 @@ impl VM {
 
             match instruction {
                 Op::Constant => {
-                    let constant = read_constant!()?.clone();
+                    let constant = self.read_constant()?.clone();
                     self.push(constant);
                 }
                 Op::Nil => self.push(Value::Nil),
@@ -352,17 +349,17 @@ impl VM {
                     self.pop()?;
                 }
                 Op::GetLocal => {
-                    let slot: usize = read_u8!()?.into();
+                    let slot: usize = self.read_u8()?.into();
                     let offset = self.current_frame().starts_at;
                     self.push(self.stack[slot + offset].clone());
                 }
                 Op::SetLocal => {
-                    let slot: usize = read_u8!()?.into();
+                    let slot: usize = self.read_u8()?.into();
                     let offset = self.current_frame().starts_at;
                     self.stack[slot + offset] = self.peek(0)?.clone();
                 }
                 Op::GetGlobal => {
-                    let name = read_string!()?.as_str().string;
+                    let name = self.read_string()?.as_str().string;
                     match self.globals.get(name) {
                         Some(value) => {
                             let clone = value.clone();
@@ -375,12 +372,12 @@ impl VM {
                     }
                 }
                 Op::DefineGlobal => {
-                    let name = read_string!()?.as_str().string;
+                    let name = self.read_string()?.as_str().string;
                     let value = self.pop()?;
                     self.globals.insert(name, value);
                 }
                 Op::SetGlobal => {
-                    let name = read_string!()?;
+                    let name = self.read_string()?;
                     let string = name.as_str().string;
                     if self.globals.insert(string, self.peek(0)?.clone()).is_none() {
                         self.globals.remove(string);
@@ -389,7 +386,7 @@ impl VM {
                     }
                 }
                 Op::GetUpvalue => {
-                    let slot = read_u8!()? as usize;
+                    let slot = self.read_u8()? as usize;
                     let value = self.current_frame().closure.as_ref().unwrap().upvalues[slot]
                         .borrow()
                         .closed
@@ -397,7 +394,7 @@ impl VM {
                     self.push(value)
                 }
                 Op::SetUpvalue => {
-                    let slot = read_u8!()? as usize;
+                    let slot = self.read_u8()? as usize;
                     let value = self.peek(0)?.clone();
                     let mut upvalue = self.current_frame_mut().closure.as_mut().unwrap().upvalues
                         [slot]
@@ -445,29 +442,29 @@ impl VM {
                     self.pop()?.println();
                 }
                 Op::Jump => {
-                    let offset: usize = read_u16!()?.into();
+                    let offset: usize = self.read_u16()?.into();
                     let mut frame = self.current_frame_mut();
                     frame.ip += offset;
                 }
                 Op::JumpIfFalse => {
-                    let offset: usize = read_u16!()?.into();
+                    let offset: usize = self.read_u16()?.into();
                     if self.peek(0)?.is_falsy() {
                         let frame = self.current_frame_mut();
                         frame.ip += offset
                     }
                 }
                 Op::Loop => {
-                    let offset = read_u16!()?;
+                    let offset = self.read_u16()?;
                     let frame = self.current_frame_mut();
                     frame.ip -= offset as usize;
                 }
                 Op::Call => {
-                    let arg_count = read_u8!()? as usize;
+                    let arg_count = self.read_u8()? as usize;
                     let callee = self.peek(arg_count)?.clone();
                     self.call_value(callee, arg_count)?;
                 }
                 Op::Closure => {
-                    let fun = match read_constant!()? {
+                    let fun = match self.read_constant()? {
                         Value::Function(fun) => Ok(fun.clone()),
                         _ => Err(InterpretError::InternalError(
                             "Expected function for closure",
@@ -477,8 +474,8 @@ impl VM {
                     let mut closure = Closure::new(fun);
                     let offset = self.current_frame().starts_at;
                     for i in 0..upvalue_count {
-                        let is_local = read_u8!()?;
-                        let index = read_u8!()? as usize;
+                        let is_local = self.read_u8()?;
+                        let index = self.read_u8()? as usize;
                         let upvalue = if is_local == 1 {
                             self.capture_upvalue(&self.stack[offset + index])
                         } else {

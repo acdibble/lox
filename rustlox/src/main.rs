@@ -31,9 +31,8 @@ fn run_file(path: &String) {
     use std::fs;
 
     let source = fs::read_to_string(path).expect("Failed to read filed");
-    let temp = &source;
 
-    match vm::interpret(temp) {
+    match vm::interpret(&source) {
         Err(InterpretError::CompileError) => std::process::exit(65),
         Err(InterpretError::RuntimeError) => std::process::exit(70),
         Err(InterpretError::InternalError(message)) => {
