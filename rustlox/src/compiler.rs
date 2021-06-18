@@ -724,8 +724,7 @@ impl<'a> CompilerWrapper<'a> {
     }
 }
 
-pub fn compile(source: &String) -> Result<Function, InterpretError> {
-    let tokens = scanner::scan_tokens(source);
+pub fn compile<'a>(tokens: Vec<Token<'a>>) -> Result<Function, InterpretError> {
     let statements = parser::parse_tokens(&tokens);
     if statements.is_none() {
         return Err(InterpretError::CompileError);

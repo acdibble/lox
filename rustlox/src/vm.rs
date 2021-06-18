@@ -1,6 +1,7 @@
 use crate::chunk::*;
 use crate::compiler::*;
 use crate::native;
+use crate::scanner;
 use crate::string;
 use crate::value::*;
 use std::cell::RefCell;
@@ -62,7 +63,11 @@ type Result<T> = std::result::Result<T, InterpretError>;
 
 pub fn interpret(source: &String) -> Result<()> {
     with_vm(|vm| {
-        let closure = Closure::new(compile(source)?);
+        let tokens = scanner::scan_tokens(source);
+        if tokens.is_empty() {
+            return Ok(());
+        }
+        let closure = Closure::new(compile(tokens)?);
         vm.push(Value::Closure(closure.clone()));
         vm.call(closure, 0).ok();
         vm.run()
