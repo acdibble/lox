@@ -394,12 +394,12 @@ impl<'a> CompilerWrapper<'a> {
 
     fn statement(&mut self, statement: &Stmt<'a>) {
         match statement {
-            Stmt::Break(statement) => self.break_statement(statement),
             Stmt::Block(statement) => {
                 for stmt in &statement.statements {
                     self.statement(stmt);
                 }
             }
+            Stmt::Break(statement) => self.break_statement(statement),
             Stmt::Continue(statement) => self.continue_statement(statement),
             Stmt::Expression(statement) => self.expression(&statement.expression),
             Stmt::For(statement) => self.for_statement(statement),

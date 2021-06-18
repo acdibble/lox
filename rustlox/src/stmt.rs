@@ -2,13 +2,13 @@ use crate::expr::Expr;
 use crate::scanner::Token;
 
 #[derive(Debug)]
-pub struct Break<'a> {
-    pub keyword: &'a Token<'a>,
+pub struct Block<'a> {
+    pub statements: Vec<Stmt<'a>>,
 }
 
 #[derive(Debug)]
-pub struct Block<'a> {
-    pub statements: Vec<Stmt<'a>>,
+pub struct Break<'a> {
+    pub keyword: &'a Token<'a>,
 }
 
 #[derive(Debug)]
@@ -75,8 +75,8 @@ pub struct While<'a> {
 
 #[derive(Debug)]
 pub enum Stmt<'a> {
-    Break(Break<'a>),
     Block(Block<'a>),
+    Break(Break<'a>),
     Continue(Continue<'a>),
     Expression(Expression<'a>),
     For(For<'a>),
