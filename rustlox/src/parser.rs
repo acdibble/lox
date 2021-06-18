@@ -119,9 +119,7 @@ impl<'a> Parser<'a> {
         let enclosing_kind = self.function_kind;
         self.function_kind = kind;
 
-        let name = self
-            .consume(TokenKind::Identifier, "Expect function name.")
-            .unwrap();
+        let name = self.consume(TokenKind::Identifier, "Expect function name.")?;
 
         self.consume(TokenKind::LeftParen, "Expect '(' after function name")?;
 
@@ -185,9 +183,7 @@ impl<'a> Parser<'a> {
     }
 
     fn var_declaration(&mut self) -> ParseResult<Stmt<'a>> {
-        let name = self
-            .consume(TokenKind::Identifier, "Expect variable name.")
-            .unwrap();
+        let name = self.consume(TokenKind::Identifier, "Expect variable name.")?;
 
         let initializer = if self.match_current(TokenKind::Equal) {
             Some(self.expression()?)
