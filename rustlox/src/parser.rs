@@ -387,7 +387,8 @@ impl<'a> Parser<'a> {
     fn equality(&mut self) -> ParseResult<Expr<'a>> {
         let mut expr = self.comparison()?;
 
-        while self.match_current(TokenKind::BangEqual) || self.match_current(TokenKind::BangEqual) {
+        while self.match_current(TokenKind::EqualEqual) || self.match_current(TokenKind::BangEqual)
+        {
             let operator = self.previous().unwrap();
             let right = Box::from(self.equality()?);
             expr = Expr::Binary(expr::Binary {
