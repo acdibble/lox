@@ -80,6 +80,10 @@ impl Upvalue {
         self.location = &self.closed;
         self.next = None;
     }
+
+    pub fn as_value(&self) -> Value {
+        unsafe { (*self.location).clone() }
+    }
 }
 
 #[derive(Clone)]

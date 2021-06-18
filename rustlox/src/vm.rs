@@ -390,8 +390,7 @@ impl VM {
                     let slot = self.read_u8()? as usize;
                     let value = self.current_frame().closure.as_ref().unwrap().upvalues[slot]
                         .borrow()
-                        .closed
-                        .clone();
+                        .as_value();
                     self.push(value)
                 }
                 Op::SetUpvalue => {
