@@ -414,7 +414,8 @@ impl VM {
                         (Value::Number(b), Value::Number(a)) => Value::Number(a + b),
                         (Value::String(b), Value::String(a)) => Value::String(a + b),
                         _ => {
-                            return self.runtime_error("Operands must be numbers.");
+                            return self
+                                .runtime_error("Operands must be two numbers or two strings.");
                         }
                     };
 
