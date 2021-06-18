@@ -1,7 +1,7 @@
 use crate::chunk::*;
 use crate::expr::{self, Expr};
 use crate::parser;
-use crate::scanner::{self, Token, TokenKind};
+use crate::scanner::{Token, TokenKind};
 use crate::stmt::{self, Stmt};
 use crate::string;
 use crate::value::*;
@@ -31,6 +31,8 @@ struct Compiler<'a> {
     scope_depth: usize,
     upvalues: Vec<Upvalue>,
 }
+
+type CompileResult = Result<(), InterpretError>;
 
 impl<'a> Compiler<'a> {
     fn new(enclosing: Option<Rc<RefCell<Compiler<'a>>>>, name: &str) -> Compiler<'a> {
@@ -64,20 +66,17 @@ impl<'a> Compiler<'a> {
         f(&mut enclosing)
     }
 
-    fn resolve_local(&self, name: &str) -> (Option<u8>, Option<&'static str>) {
+    fn resolve_local(&self, name: &str) -> Result<Option<u8>, &'static str> {
         for (i, local) in self.locals.iter().enumerate().rev() {
             if local.name == name {
                 if local.depth.is_none() {
-                    return (
-                        Some(i as u8),
-                        Some("Can't read local variable in its own initializer."),
-                    );
+                    return Err("Can't read local variable in its own initializer.");
                 }
-                return (Some(i as u8), None);
+                return Ok(Some(i as u8));
             }
         }
 
-        (None, None)
+        Ok(None)
     }
 
     fn add_upvalue(&mut self, index: u8, is_local: bool) -> Result<u8, &'static str> {
@@ -95,27 +94,21 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn resolve_upvalue(&mut self, name: &str) -> (Option<u8>, Option<&'static str>) {
+    fn resolve_upvalue(&mut self, name: &str) -> Result<Option<u8>, &'static str> {
         if self.enclosing.is_none() {
-            return (None, None);
+            return Ok(None);
         }
 
-        if let (Some(local), err) = self.with_enclosing(|c| c.resolve_local(name)) {
+        if let Some(local) = self.with_enclosing(|c| c.resolve_local(name))? {
             self.with_enclosing_mut(|c| c.locals[local as usize].is_captured = true);
-            return match self.add_upvalue(local, true) {
-                Ok(value) => (Some(value), err),
-                Err(message) => (Some(0), Some(message)),
-            };
+            return Ok(Some(self.add_upvalue(local, true)?));
         }
 
-        if let (Some(value), err) = self.with_enclosing_mut(|c| c.resolve_upvalue(name)) {
-            return match self.add_upvalue(value, false) {
-                Ok(value) => (Some(value), err),
-                Err(message) => (Some(0), Some(message)),
-            };
+        if let Some(value) = self.with_enclosing_mut(|c| c.resolve_upvalue(name))? {
+            return Ok(Some(self.add_upvalue(value, false)?));
         }
 
-        (None, None)
+        Ok(None)
     }
 }
 
@@ -183,7 +176,7 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_byte(byte2);
     }
 
-    fn emit_loop(&mut self, loop_start: usize) {
+    fn emit_loop(&mut self, loop_start: usize) -> CompileResult {
         self.emit_op(Op::Loop);
 
         let offset: u16 = match self
@@ -192,13 +185,13 @@ impl<'a> CompilerWrapper<'a> {
         {
             Ok(val) => val,
             Err(_) => {
-                self.error("Loop body too large.");
-                0
+                return self.error(None, "Loop body too large.");
             }
         };
 
         self.emit_byte((offset >> 8) as u8 & 0xff);
         self.emit_byte((offset & 0xff) as u8);
+        Ok(())
     }
 
     fn emit_jump(&mut self, instruction: Op) -> usize {
@@ -222,20 +215,20 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_bytes(Op::Constant as u8, constant);
     }
 
-    fn patch_jump(&mut self, offset: usize) {
+    fn patch_jump(&mut self, offset: usize) -> CompileResult {
         let jump: u16 = match self
             .with_current_chunk(|chunk| chunk.code.len() - offset - 2)
             .try_into()
         {
             Ok(value) => value,
             Err(_) => {
-                self.error("Too much code to jump over.");
-                0
+                return self.error(None, "Too much code to jump over.");
             }
         };
 
         self.with_current_chunk_mut(|chunk| chunk.code[offset] = ((jump >> 8) & 0xff) as u8);
         self.with_current_chunk_mut(|chunk| chunk.code[offset + 1] = (jump & 0xff) as u8);
+        Ok(())
     }
 
     #[inline(always)]
@@ -243,17 +236,17 @@ impl<'a> CompilerWrapper<'a> {
         self.with_current_chunk(|chunk| chunk.code.len())
     }
 
-    fn identifier_constant(&mut self, name: &str) -> u8 {
-        self.make_constant(Value::String(string::Handle::from_str(name)))
+    fn identifier_constant(&mut self, name: &str) -> Result<u8, InterpretError> {
+        Ok(self.make_constant(Value::String(string::Handle::from_str(name))))
     }
 
-    fn add_local(&mut self, name: Token<'a>) {
+    fn add_local(&mut self, name: Token<'a>) -> CompileResult {
         if self.current.as_ref().unwrap().borrow().locals.len() >= u8::MAX as usize {
-            self.error("Too many local variables in function.");
-            return;
+            self.error(None, "Too many local variables in function.")?;
         }
 
-        self.current
+        Ok(self
+            .current
             .as_ref()
             .unwrap()
             .borrow_mut()
@@ -262,12 +255,12 @@ impl<'a> CompilerWrapper<'a> {
                 name: name.lexeme,
                 depth: None,
                 is_captured: false,
-            })
+            }))
     }
 
-    fn declare_variable(&mut self, name: &'a Token<'a>) {
+    fn declare_variable(&mut self, name: &'a Token<'a>) -> CompileResult {
         if self.current.as_ref().unwrap().borrow().scope_depth == 0 {
-            return;
+            return Ok(());
         }
 
         let mut unique = true;
@@ -285,19 +278,23 @@ impl<'a> CompilerWrapper<'a> {
         }
 
         if !unique {
-            self.error("Already a variable with this name in this scope.");
+            return self.error(
+                Some(name.lexeme),
+                "Already a variable with this name in this scope.",
+            );
         }
 
-        self.add_local(*name);
+        self.add_local(*name)
     }
 
-    fn parse_variable(&mut self, token: &'a Token<'a>) -> u8 {
-        self.declare_variable(token);
+    fn parse_variable(&mut self, token: &'a Token<'a>) -> Result<u8, InterpretError> {
+        self.current_line = token.line;
+        self.declare_variable(token)?;
         if self.current.as_ref().unwrap().borrow().scope_depth > 0 {
-            return 0;
+            return Ok(0);
         }
 
-        return self.identifier_constant(token.lexeme);
+        self.identifier_constant(token.lexeme)
     }
 
     fn mark_initialized(&mut self) {
@@ -379,22 +376,35 @@ impl<'a> CompilerWrapper<'a> {
         &mut self,
         statements: std::vec::IntoIter<Stmt<'a>>,
     ) -> Result<Function, InterpretError> {
+        let mut error = false;
         for statement in statements {
-            self.statement(&statement)
+            match self.statement(&statement) {
+                Ok(_) => (),
+                Err(_) => error = true,
+            }
         }
 
+        if error {
+            return Err(InterpretError::CompileError);
+        }
         let compiler = self.end_compiler();
         Ok(compiler.function)
     }
 
-    fn error(&mut self, _message: &'static str) {
-        todo!()
+    fn error(&mut self, lexeme: Option<&str>, message: &'static str) -> CompileResult {
+        if let Some(lex) = lexeme {
+            eprint!("Error at '{}': ", lex);
+        }
+        eprintln!("{}", message);
+        Err(InterpretError::CompileError)
     }
 
-    fn statement(&mut self, statement: &Stmt<'a>) {
+    fn statement(&mut self, statement: &Stmt<'a>) -> CompileResult {
         match statement {
+            Stmt::Block(statement) => self.block_statement(statement),
             // Stmt::Break(statement) => self.break_statement(statement),
             // Stmt::Continue(statement) => self.continue_statement(statement),
+            Stmt::Expression(statement) => self.expression_statement(statement),
             Stmt::For(statement) => self.for_statement(statement),
             Stmt::Function(statement) => self.fun_declaration(statement),
             Stmt::If(statement) => self.if_statement(statement),
@@ -405,14 +415,19 @@ impl<'a> CompilerWrapper<'a> {
         }
     }
 
-    fn break_statement(&mut self, _statement: &stmt::Break) {
-        let jump = self.emit_jump(Op::Jump);
-        let depth = self.loop_depth;
-        self.breaks.push((jump, depth))
+    fn block_statement(&mut self, statement: &stmt::Block<'a>) -> CompileResult {
+        self.begin_scope();
+        for stmt in &statement.statements {
+            self.statement(stmt)?;
+        }
+        self.end_scope();
+        Ok(())
     }
 
-    fn continue_statement(&mut self, _statement: &stmt::Continue) {
-        self.emit_loop(self.continue_point);
+    fn expression_statement(&mut self, statement: &stmt::Expression<'a>) -> CompileResult {
+        self.expression(&statement.expression)?;
+        self.emit_op(Op::Pop);
+        Ok(())
     }
 
     // fn break_statement(&mut self, _statement: &stmt::Break) {
@@ -425,6 +440,8 @@ impl<'a> CompilerWrapper<'a> {
     //     self.emit_loop(self.continue_point);
     // }
 
+    fn function(&mut self, function: &stmt::Function<'a>) -> CompileResult {
+        self.current_line = function.name.line;
         self.current = Some(Rc::new(RefCell::new(Compiler::new(
             Some(self.current.as_ref().unwrap().clone()),
             function.name.lexeme,
@@ -433,12 +450,12 @@ impl<'a> CompilerWrapper<'a> {
         self.begin_scope();
 
         for token in &function.params {
-            let constant = self.parse_variable(token);
+            let constant = self.parse_variable(token)?;
             self.define_variable(constant);
         }
 
         for stmt in &function.body {
-            self.statement(stmt)
+            self.statement(stmt)?
         }
 
         let compiler = self.end_compiler();
@@ -449,13 +466,14 @@ impl<'a> CompilerWrapper<'a> {
             self.emit_byte(is_local.into());
             self.emit_byte(index);
         }
+        Ok(())
     }
 
-    fn for_statement(&mut self, statement: &stmt::For<'a>) {
+    fn for_statement(&mut self, statement: &stmt::For<'a>) -> CompileResult {
         self.begin_scope();
 
         if let Some(stmt) = &statement.initializer {
-            self.statement(stmt);
+            self.statement(stmt)?;
         }
 
         let mut before_condition: Option<usize> = None;
@@ -464,7 +482,7 @@ impl<'a> CompilerWrapper<'a> {
 
         if let Some(cond) = &statement.condition {
             before_condition = Some(self.get_current_len());
-            self.expression(cond);
+            self.expression(cond)?;
             jump_after_cond = Some(self.emit_jump(Op::JumpIfFalse));
             self.emit_op(Op::Pop);
             jump_to_body = Some(self.emit_jump(Op::Jump));
@@ -474,36 +492,33 @@ impl<'a> CompilerWrapper<'a> {
 
         if let Some(incr) = &statement.increment {
             before_increment = Some(self.get_current_len());
-            self.expression(incr);
+            self.expression(incr)?;
             if let Some(loop_point) = before_condition {
-                self.emit_loop(loop_point)
+                self.emit_loop(loop_point)?
             }
         }
 
         let before_body = self.get_current_len();
 
         if let Some(jump) = jump_to_body {
-            self.patch_jump(jump);
+            self.patch_jump(jump)?;
         }
 
         // self.loop_depth += 1;
         // let enclosing_continue_point = self.continue_point;
 
-        let enclosing_continue_point = self.continue_point;
-        self.continue_point = if let Some(incr) = before_increment {
+        self.statement(&statement.body)?;
+
+        self.emit_loop(if let Some(incr) = before_increment {
             incr
         } else if let Some(cond) = before_condition {
             cond
         } else {
             before_body
-        };
-
-        self.statement(&statement.body);
-
-        self.emit_loop(self.continue_point);
+        })?;
 
         if let Some(jump) = jump_after_cond {
-            self.patch_jump(jump);
+            self.patch_jump(jump)?;
         }
 
         // self.patch_breaks();
@@ -511,79 +526,88 @@ impl<'a> CompilerWrapper<'a> {
         // self.loop_depth -= 1;
 
         self.end_scope();
+        Ok(())
     }
 
-    fn fun_declaration(&mut self, function: &stmt::Function<'a>) {
-        let global = self.parse_variable(function.name);
+    fn fun_declaration(&mut self, function: &stmt::Function<'a>) -> CompileResult {
+        let global = self.parse_variable(function.name)?;
         self.mark_initialized();
-        self.function(function);
+        self.function(function)?;
         self.define_variable(global);
+        Ok(())
     }
 
-    fn if_statement(&mut self, statement: &stmt::If<'a>) {
-        self.expression(&statement.condition);
+    fn if_statement(&mut self, statement: &stmt::If<'a>) -> CompileResult {
+        self.expression(&statement.condition)?;
 
         let jump_to_else = self.emit_jump(Op::JumpIfFalse);
         self.emit_op(Op::Pop);
-        self.statement(statement.then_branch.as_ref());
+        self.statement(&statement.then_branch)?;
 
         let jump_from_then = self.emit_jump(Op::Jump);
-        self.patch_jump(jump_to_else);
+        self.patch_jump(jump_to_else)?;
         self.emit_op(Op::Pop);
 
         if let Some(stmt) = &statement.else_branch {
-            self.statement(stmt.as_ref());
+            self.statement(stmt)?;
         }
-        self.patch_jump(jump_from_then);
+        self.patch_jump(jump_from_then)?;
+        Ok(())
     }
 
-    fn print_statement(&mut self, statement: &stmt::Print) {
-        self.expression(&statement.expression);
-        self.emit_op(Op::Print)
+    fn print_statement(&mut self, statement: &stmt::Print) -> CompileResult {
+        self.expression(&statement.expression)?;
+        self.emit_op(Op::Print);
+        Ok(())
     }
 
-    fn return_statement(&mut self, statement: &stmt::Return) {
+    fn return_statement(&mut self, statement: &stmt::Return) -> CompileResult {
         if let Some(value) = &statement.value {
-            self.expression(value)
+            self.expression(value)?
         } else {
             self.emit_op(Op::Nil)
         }
 
-        self.emit_op(Op::Return)
+        self.emit_op(Op::Return);
+        Ok(())
     }
 
+    fn while_statement(&mut self, statement: &stmt::While<'a>) -> CompileResult {
         let loop_start = self.get_current_len();
         // let enclosing_continue_point = self.continue_point;
         // self.continue_point = self.get_current_len();
         // self.loop_depth += 1;
 
-        self.expression(&statement.condition);
+        self.expression(&statement.condition)?;
         let end_jump = self.emit_jump(Op::JumpIfFalse);
         self.emit_op(Op::Pop);
 
-        self.statement(statement.body.as_ref());
-        self.emit_loop(self.continue_point);
-        self.patch_jump(end_jump);
+        self.statement(&statement.body)?;
+
+        self.emit_loop(loop_start)?;
+        self.patch_jump(end_jump)?;
         self.emit_op(Op::Pop);
 
         // self.patch_breaks();
         // self.loop_depth -= 1;
         // self.continue_point = enclosing_continue_point;
+        Ok(())
     }
 
-    fn var_declaration(&mut self, statement: &stmt::Var<'a>) {
-        let global = self.parse_variable(statement.name);
+    fn var_declaration(&mut self, statement: &stmt::Var<'a>) -> CompileResult {
+        let global = self.parse_variable(statement.name)?;
 
         if let Some(expr) = &statement.initializer {
-            self.expression(expr);
+            self.expression(expr)?;
         } else {
             self.emit_op(Op::Nil);
         }
 
         self.define_variable(global);
+        Ok(())
     }
 
-    fn expression(&mut self, expression: &Expr) {
+    fn expression(&mut self, expression: &Expr) -> CompileResult {
         match expression {
             Expr::Assign(expr) => self.assignment(expr),
             Expr::Binary(expr) => self.binary(expr),
@@ -596,31 +620,41 @@ impl<'a> CompilerWrapper<'a> {
         }
     }
 
-    fn assignment(&mut self, assignment: &expr::Assign) {
-        self.expression(assignment.value.as_ref());
-
-        let name = assignment.name.lexeme;
-        let (set_op, arg) = if let (Some(arg), err) = self.with_current(|c| c.resolve_local(name)) {
-            if let Some(message) = err {
-                self.error(message)
-            }
-            (Op::SetLocal, arg)
-        } else if let (Some(arg), err) = self.with_current_mut(|c| c.resolve_upvalue(name)) {
-            if let Some(message) = err {
-                self.error(message)
-            }
-            (Op::SetUpvalue, arg)
-        } else {
-            (Op::SetGlobal, self.identifier_constant(name))
+    fn get_arg(
+        &mut self,
+        name: &str,
+        local: Op,
+        upvalue: Op,
+        global: Op,
+    ) -> Result<(Op, u8), InterpretError> {
+        match self.with_current(|c| c.resolve_local(name)) {
+            Ok(Some(result)) => return Ok((local, result)),
+            Err(message) => return self.error(Some(name), message).and(Ok((local, 0))),
+            _ => (),
         };
 
-        self.emit_bytes(set_op as u8, arg);
-        self.emit_op(Op::Pop);
+        match self.with_current_mut(|c| c.resolve_upvalue(name)) {
+            Ok(Some(result)) => return Ok((upvalue, result)),
+            Err(message) => return self.error(Some(name), message).and(Ok((upvalue, 0))),
+            _ => (),
+        }
+
+        Ok((global, self.identifier_constant(name)?))
     }
 
-    fn binary(&mut self, binary: &expr::Binary) {
-        self.expression(binary.left.as_ref());
-        self.expression(binary.right.as_ref());
+    fn assignment(&mut self, assignment: &expr::Assign) -> CompileResult {
+        self.expression(&assignment.value)?;
+
+        let name = assignment.name.lexeme;
+        let (set_op, arg) = self.get_arg(name, Op::SetLocal, Op::SetUpvalue, Op::SetGlobal)?;
+
+        self.emit_bytes(set_op as u8, arg);
+        Ok(())
+    }
+
+    fn binary(&mut self, binary: &expr::Binary) -> CompileResult {
+        self.expression(&binary.left)?;
+        self.expression(&binary.right)?;
 
         self.current_line = binary.operator.line;
         match binary.operator.kind {
@@ -635,30 +669,33 @@ impl<'a> CompilerWrapper<'a> {
             TokenKind::Slash => self.emit_op(Op::Divide),
             TokenKind::Star => self.emit_op(Op::Multiply),
             _ => unreachable!(),
-        }
+        };
+        Ok(())
     }
 
-    fn call(&mut self, call: &expr::Call) {
-        self.expression(&call.callee);
+    fn call(&mut self, call: &expr::Call) -> CompileResult {
+        self.expression(&call.callee)?;
         for arg in &call.args {
-            self.expression(arg);
+            self.expression(arg)?;
         }
         self.emit_bytes(Op::Call as u8, call.args.len() as u8);
+        Ok(())
     }
 
-    fn literal(&mut self, literal: &expr::Literal) {
+    fn literal(&mut self, literal: &expr::Literal) -> CompileResult {
         self.current_line = literal.value.line;
         match literal.value.kind {
             TokenKind::Nil => self.emit_op(Op::Nil),
             TokenKind::False => self.emit_op(Op::False),
             TokenKind::True => self.emit_op(Op::True),
-            TokenKind::Number => self.number(literal.value.lexeme),
-            TokenKind::String => self.string(literal.value.lexeme),
+            TokenKind::Number => self.number(literal.value.lexeme)?,
+            TokenKind::String => self.string(literal.value.lexeme)?,
             _ => unreachable!(),
-        }
+        };
+        Ok(())
     }
 
-    fn logical(&mut self, logical: &expr::Logical) {
+    fn logical(&mut self, logical: &expr::Logical) -> CompileResult {
         match logical.operator.kind {
             TokenKind::And => self.and(logical),
             TokenKind::Or => self.or(logical),
@@ -666,64 +703,57 @@ impl<'a> CompilerWrapper<'a> {
         }
     }
 
-    fn unary(&mut self, unary: &expr::Unary) {
+    fn unary(&mut self, unary: &expr::Unary) -> CompileResult {
         self.current_line = unary.operator.line;
-        self.expression(unary.right.as_ref());
+        self.expression(&unary.right)?;
         match unary.operator.kind {
             TokenKind::Bang => self.emit_op(Op::Not),
             TokenKind::Minus => self.emit_op(Op::Negate),
             _ => unreachable!(),
-        }
-    }
-
-    fn variable(&mut self, variable: &expr::Variable) {
-        let name = variable.name.lexeme;
-        let (get_op, arg) = if let (Some(arg), err) = self.with_current(|c| c.resolve_local(name)) {
-            if let Some(message) = err {
-                self.error(message)
-            }
-            (Op::GetLocal, arg)
-        } else if let (Some(arg), err) = self.with_current_mut(|c| c.resolve_upvalue(name)) {
-            if let Some(message) = err {
-                self.error(message)
-            }
-            (Op::GetUpvalue, arg)
-        } else {
-            (Op::GetGlobal, self.identifier_constant(name))
         };
-
-        self.emit_bytes(get_op as u8, arg);
+        Ok(())
     }
 
-    fn and(&mut self, logical: &expr::Logical) {
-        self.expression(logical.left.as_ref());
+    fn variable(&mut self, variable: &expr::Variable) -> CompileResult {
+        let name = variable.name.lexeme;
+        let (get_op, arg) = self.get_arg(name, Op::GetLocal, Op::GetUpvalue, Op::GetGlobal)?;
+        self.emit_bytes(get_op as u8, arg);
+        Ok(())
+    }
+
+    fn and(&mut self, logical: &expr::Logical) -> CompileResult {
+        self.expression(&logical.left)?;
         let jump = self.emit_jump(Op::JumpIfFalse);
         self.emit_op(Op::Pop);
 
-        self.expression(logical.right.as_ref());
-        self.patch_jump(jump);
+        self.expression(&logical.right)?;
+        self.patch_jump(jump)?;
+        Ok(())
     }
 
-    fn or(&mut self, logical: &expr::Logical) {
-        self.expression(logical.left.as_ref());
+    fn or(&mut self, logical: &expr::Logical) -> CompileResult {
+        self.expression(&logical.left)?;
         let else_jump = self.emit_jump(Op::JumpIfFalse);
         let end_jump = self.emit_jump(Op::Jump);
 
-        self.patch_jump(else_jump);
+        self.patch_jump(else_jump)?;
         self.emit_op(Op::Pop);
-        self.expression(logical.right.as_ref());
+        self.expression(&logical.right)?;
 
-        self.patch_jump(end_jump);
+        self.patch_jump(end_jump)?;
+        Ok(())
     }
 
-    fn number(&mut self, lexeme: &str) {
+    fn number(&mut self, lexeme: &str) -> CompileResult {
         let value: f64 = lexeme.parse().expect("Failed to parse string into float");
-        self.emit_constant(Value::Number(value))
+        self.emit_constant(Value::Number(value));
+        Ok(())
     }
 
-    fn string(&mut self, lexeme: &str) {
+    fn string(&mut self, lexeme: &str) -> CompileResult {
         let handle = string::Handle::from_str(&lexeme[1..lexeme.len() - 1]);
-        self.emit_constant(Value::String(handle))
+        self.emit_constant(Value::String(handle));
+        Ok(())
     }
 }
 
