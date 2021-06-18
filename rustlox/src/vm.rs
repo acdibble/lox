@@ -93,6 +93,7 @@ impl VM {
         for frame in self.frames.iter_mut() {
             frame.reset();
         }
+        self.frame_count = 0;
     }
 
     #[inline(always)]

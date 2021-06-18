@@ -1,6 +1,6 @@
 use std::iter::{Enumerate, Peekable};
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum TokenKind {
     // Single-character tokens.
@@ -30,7 +30,9 @@ pub enum TokenKind {
     Number,
     // Keywords.
     And,
+    Break,
     Class,
+    Continue,
     Else,
     False,
     For,
@@ -49,14 +51,14 @@ pub enum TokenKind {
     Error,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Token<'a> {
     pub kind: TokenKind,
     pub line: i32,
     pub lexeme: &'a str,
 }
 
-pub struct Scanner<'a> {
+struct Scanner<'a> {
     source: &'a String,
     pub lines: i32,
     start: usize,
@@ -64,7 +66,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
-    pub fn new(source: &'a String) -> Scanner<'a> {
+    fn new(source: &'a String) -> Scanner<'a> {
         Scanner {
             source,
             lines: 1,
@@ -178,7 +180,9 @@ impl<'a> Scanner<'a> {
         let lexeme = self.get_lexeme();
         let kind = match lexeme {
             "and" => TokenKind::And,
+            "break" => TokenKind::Break,
             "class" => TokenKind::Class,
+            "continue" => TokenKind::Continue,
             "else" => TokenKind::Else,
             "false" => TokenKind::False,
             "for" => TokenKind::For,
@@ -267,4 +271,13 @@ impl<'a> Iterator for Scanner<'a> {
 
         Some(token)
     }
+}
+
+pub fn scan_tokens<'a>(source: &'a String) -> Vec<Token<'a>> {
+    let mut scanner = Scanner::new(source);
+    let mut tokens: Vec<Token<'a>> = Vec::new();
+    while let Some(token) = scanner.next() {
+        tokens.push(token)
+    }
+    tokens
 }

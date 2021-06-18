@@ -105,14 +105,9 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn add_constant(&mut self, value: Value) -> Result<u8, ()> {
-        match self.constants.len().try_into() {
-            Err(_) => Err(()),
-            Ok(index) => {
-                self.constants.push(value);
-                Ok(index)
-            }
-        }
+    pub fn add_constant(&mut self, value: Value) -> u8 {
+        self.constants.push(value);
+        (self.constants.len() - 1).try_into().unwrap()
     }
 }
 

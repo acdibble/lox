@@ -1,60 +1,14 @@
 use crate::chunk::*;
-use crate::scanner::*;
+use crate::expr::{self, Expr};
+use crate::parser;
+use crate::scanner::{self, Token, TokenKind};
+use crate::stmt::{self, Stmt};
 use crate::string;
 use crate::value::*;
 use crate::vm::InterpretError;
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::rc::Rc;
-
-#[derive(Copy, Clone, PartialOrd, PartialEq)]
-#[repr(u8)]
-enum Precedence {
-    None,
-    Assignment, // =
-    Or,         // or
-    And,        // and
-    Equality,   // == !=
-    Comparison, // < > <= >=
-    Term,       // + -
-    Factor,     // * /
-    Unary,      // ! -
-    Call,       // . ()
-    Primary,
-}
-
-impl Precedence {
-    fn higher(&self) -> Precedence {
-        match self {
-            Precedence::None => Precedence::Assignment,
-            Precedence::Assignment => Precedence::Or,
-            Precedence::Or => Precedence::And,
-            Precedence::And => Precedence::Equality,
-            Precedence::Equality => Precedence::Comparison,
-            Precedence::Comparison => Precedence::Term,
-            Precedence::Term => Precedence::Factor,
-            Precedence::Factor => Precedence::Unary,
-            Precedence::Unary => Precedence::Call,
-            _ => Precedence::Primary,
-        }
-    }
-}
-
-enum ErrorLocation {
-    Current,
-    Previous,
-    End,
-}
-
-type ParseFn<'a> = fn(&mut CompilerWrapper<'a>, bool);
-type ParseRule<'a> = (Option<ParseFn<'a>>, Option<ParseFn<'a>>, Precedence);
-
-struct Parser<'a> {
-    previous: Option<Token<'a>>,
-    current: Option<Token<'a>>,
-    had_error: bool,
-    panic_mode: bool,
-}
 
 #[derive(Copy, Clone)]
 struct Local<'a> {
@@ -69,16 +23,9 @@ struct Upvalue {
     is_local: bool,
 }
 
-#[derive(PartialEq)]
-enum FunctionKind {
-    Function,
-    Script,
-}
-
 struct Compiler<'a> {
     enclosing: Option<Rc<RefCell<Compiler<'a>>>>,
     function: Function,
-    function_kind: FunctionKind,
 
     locals: Vec<Local<'a>>,
     scope_depth: usize,
@@ -86,14 +33,9 @@ struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    fn new(
-        enclosing: Option<Rc<RefCell<Compiler<'a>>>>,
-        function_kind: FunctionKind,
-        name: &str,
-    ) -> Compiler<'a> {
+    fn new(enclosing: Option<Rc<RefCell<Compiler<'a>>>>, name: &str) -> Compiler<'a> {
         Compiler {
             enclosing,
-            function_kind,
             function: Function {
                 arity: 0,
                 chunk: Rc::new(Chunk::new()),
@@ -106,7 +48,7 @@ impl<'a> Compiler<'a> {
                 name: "",
                 is_captured: false,
             }],
-            upvalues: Default::default(),
+            upvalues: Vec::new(),
         }
     }
 }
@@ -178,48 +120,22 @@ impl<'a> Compiler<'a> {
 }
 
 struct CompilerWrapper<'a> {
-    parser: Parser<'a>,
-    scanner: &'a mut Scanner<'a>,
     current: Option<Rc<RefCell<Compiler<'a>>>>,
+    current_line: i32,
+
+    continue_point: usize,
+    breaks: Vec<(usize, usize)>,
+    loop_depth: usize,
 }
 
 impl<'a> CompilerWrapper<'a> {
-    fn get_rule(kind: TokenKind) -> ParseRule<'a> {
-        match kind {
-            TokenKind::LeftParen => (Some(Self::grouping), Some(Self::call), Precedence::Call),
-            TokenKind::Minus => (Some(Self::unary), Some(Self::binary), Precedence::Term),
-            TokenKind::Plus => (None, Some(Self::binary), Precedence::Term),
-            TokenKind::Slash => (None, Some(Self::binary), Precedence::Factor),
-            TokenKind::Star => (None, Some(Self::binary), Precedence::Factor),
-            TokenKind::Bang => (Some(Self::unary), None, Precedence::None),
-            TokenKind::BangEqual => (None, Some(Self::binary), Precedence::Equality),
-            TokenKind::EqualEqual => (None, Some(Self::binary), Precedence::Equality),
-            TokenKind::Greater => (None, Some(Self::binary), Precedence::Comparison),
-            TokenKind::GreaterEqual => (None, Some(Self::binary), Precedence::Comparison),
-            TokenKind::Less => (None, Some(Self::binary), Precedence::Comparison),
-            TokenKind::LessEqual => (None, Some(Self::binary), Precedence::Comparison),
-            TokenKind::Identifier => (Some(Self::variable), None, Precedence::None),
-            TokenKind::String => (Some(Self::string), None, Precedence::None),
-            TokenKind::Number => (Some(Self::number), None, Precedence::None),
-            TokenKind::And => (None, Some(Self::and), Precedence::And),
-            TokenKind::False => (Some(Self::literal), None, Precedence::None),
-            TokenKind::True => (Some(Self::literal), None, Precedence::None),
-            TokenKind::Nil => (Some(Self::literal), None, Precedence::None),
-            TokenKind::Or => (None, Some(Self::or), Precedence::Or),
-            _ => (None, None, Precedence::None),
-        }
-    }
-
-    pub fn new(scanner: &'a mut Scanner<'a>) -> CompilerWrapper<'a> {
+    pub fn new() -> CompilerWrapper<'a> {
         CompilerWrapper {
-            scanner,
-            parser: Parser {
-                previous: None,
-                current: None,
-                had_error: false,
-                panic_mode: false,
-            },
-            current: None,
+            current: Some(Rc::new(RefCell::new(Compiler::new(None, "")))),
+            current_line: 0,
+            continue_point: 0,
+            breaks: Vec::new(),
+            loop_depth: 0,
         }
     }
 
@@ -249,95 +165,8 @@ impl<'a> CompilerWrapper<'a> {
         f(&mut current)
     }
 
-    fn previous_kind(&self) -> TokenKind {
-        self.parser.previous.as_ref().unwrap().kind
-    }
-
-    fn error_at(&mut self, location: ErrorLocation, message: &str) {
-        if self.parser.panic_mode {
-            return;
-        }
-
-        let token = match location {
-            ErrorLocation::Current => self.parser.current.as_ref(),
-            ErrorLocation::Previous => self.parser.previous.as_ref(),
-            ErrorLocation::End => None,
-        };
-
-        let line = if let Some(token) = token {
-            token.line
-        } else {
-            self.scanner.lines
-        };
-
-        eprint!("[line {}] Error", line);
-
-        if token.is_none() {
-            eprint!(" at end");
-        } else if token.unwrap().kind != TokenKind::Error {
-            eprint!(" at '{}'", token.unwrap().lexeme);
-        }
-
-        eprintln!(": {}", message);
-        self.parser.panic_mode = true;
-        self.parser.had_error = true;
-    }
-
-    fn error_at_current(&mut self, message: &str) {
-        if self.parser.current.is_none() {
-            self.error_at(ErrorLocation::End, message)
-        } else {
-            self.error_at(ErrorLocation::Current, message)
-        }
-    }
-
-    fn error(&mut self, message: &str) {
-        self.error_at(ErrorLocation::Previous, message)
-    }
-
-    fn advance(&mut self) {
-        self.parser.previous = std::mem::take(&mut self.parser.current);
-
-        loop {
-            self.parser.current = self.scanner.next();
-            if self.parser.current.is_none()
-                || self.parser.current.as_ref().unwrap().kind != TokenKind::Error
-            {
-                break;
-            }
-
-            self.error_at_current(&self.parser.current.as_ref().unwrap().lexeme);
-        }
-    }
-
-    fn consume(&mut self, kind: TokenKind, message: &str) {
-        if self.check(kind) {
-            self.advance();
-            return;
-        }
-
-        self.error_at_current(message);
-    }
-
-    fn check(&self, kind: TokenKind) -> bool {
-        if let Some(token) = self.parser.current {
-            token.kind == kind
-        } else {
-            false
-        }
-    }
-
-    fn match_current(&mut self, kind: TokenKind) -> bool {
-        if !self.check(kind) {
-            return false;
-        }
-
-        self.advance();
-        true
-    }
-
     fn emit_byte(&mut self, byte: u8) {
-        let line = self.parser.previous.as_ref().unwrap().line;
+        let line = self.current_line;
         self.with_current_chunk_mut(|chunk| chunk.write(byte, line))
     }
 
@@ -386,13 +215,7 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn make_constant(&mut self, value: Value) -> u8 {
-        match self.with_current_chunk_mut(|chunk| chunk.add_constant(value)) {
-            Ok(constant) => constant,
-            Err(()) => {
-                self.error("Too many constants in one chunk.");
-                0
-            }
-        }
+        self.with_current_chunk_mut(|chunk| chunk.add_constant(value))
     }
 
     fn emit_constant(&mut self, value: Value) {
@@ -416,149 +239,9 @@ impl<'a> CompilerWrapper<'a> {
         self.with_current_chunk_mut(|chunk| chunk.code[offset + 1] = (jump & 0xff) as u8);
     }
 
-    fn binary(&mut self, _can_assign: bool) {
-        let operator_type = self.previous_kind();
-        let rule = Self::get_rule(operator_type);
-        let precedence = rule.2.higher();
-        self.parse_precedence(precedence);
-
-        match operator_type {
-            TokenKind::BangEqual => self.emit_ops(Op::Equal, Op::Not),
-            TokenKind::EqualEqual => self.emit_op(Op::Equal),
-            TokenKind::Greater => self.emit_op(Op::Greater),
-            TokenKind::GreaterEqual => self.emit_ops(Op::Less, Op::Not),
-            TokenKind::Less => self.emit_op(Op::Less),
-            TokenKind::LessEqual => self.emit_ops(Op::Greater, Op::Not),
-            TokenKind::Plus => self.emit_op(Op::Add),
-            TokenKind::Minus => self.emit_op(Op::Subtract),
-            TokenKind::Star => self.emit_op(Op::Multiply),
-            TokenKind::Slash => self.emit_op(Op::Divide),
-            _ => unreachable!(),
-        }
-    }
-
-    fn call(&mut self, _can_assign: bool) {
-        let arg_count = self.argument_list();
-        self.emit_bytes(Op::Call as u8, arg_count);
-    }
-
-    fn literal(&mut self, _can_assign: bool) {
-        match self.previous_kind() {
-            TokenKind::False => self.emit_op(Op::False),
-            TokenKind::Nil => self.emit_op(Op::Nil),
-            TokenKind::True => self.emit_op(Op::True),
-            _ => (),
-        }
-    }
-
-    fn grouping(&mut self, _can_assign: bool) {
-        self.expression();
-        self.consume(TokenKind::RightParen, "Expect ')' after expression.")
-    }
-
-    fn string(&mut self, _can_assign: bool) {
-        let string = String::from(self.parser.previous.as_ref().unwrap().lexeme);
-
-        self.emit_constant(Value::String(string::Handle::from_str(
-            &string[1..string.len() - 1],
-        )))
-    }
-
-    fn named_variable(&mut self, name: &str, can_assign: bool) {
-        let get_op: Op;
-        let set_op: Op;
-
-        let arg = if let (Some(arg), err) = self.with_current(|c| c.resolve_local(name)) {
-            get_op = Op::GetLocal;
-            set_op = Op::SetLocal;
-            if let Some(message) = err {
-                self.error(message)
-            }
-            arg
-        } else if let (Some(arg), err) = self.with_current_mut(|c| c.resolve_upvalue(name)) {
-            get_op = Op::GetUpvalue;
-            set_op = Op::SetUpvalue;
-            if let Some(message) = err {
-                self.error(message)
-            }
-            arg
-        } else {
-            get_op = Op::GetGlobal;
-            set_op = Op::SetGlobal;
-            self.identifier_constant(name)
-        };
-
-        if can_assign && self.match_current(TokenKind::Equal) {
-            self.expression();
-            self.emit_bytes(set_op as u8, arg);
-        } else {
-            self.emit_bytes(get_op as u8, arg);
-        }
-    }
-
-    fn variable(&mut self, can_assign: bool) {
-        self.named_variable(self.parser.previous.as_ref().unwrap().lexeme, can_assign)
-    }
-
-    fn number(&mut self, _can_assign: bool) {
-        let value: f64 = self
-            .parser
-            .previous
-            .as_ref()
-            .unwrap()
-            .lexeme
-            .parse()
-            .expect("Failed to parse string into float");
-
-        self.emit_constant(Value::Number(value));
-    }
-
-    fn or(&mut self, _can_assign: bool) {
-        let else_jump = self.emit_jump(Op::JumpIfFalse);
-        let end_jump = self.emit_jump(Op::Jump);
-
-        self.patch_jump(else_jump);
-        self.emit_op(Op::Pop);
-
-        self.parse_precedence(Precedence::Or);
-        self.patch_jump(end_jump);
-    }
-
-    fn unary(&mut self, _can_assign: bool) {
-        let operator_type = self.previous_kind();
-
-        self.parse_precedence(Precedence::Unary);
-
-        match operator_type {
-            TokenKind::Minus => self.emit_op(Op::Negate),
-            TokenKind::Bang => self.emit_op(Op::Not),
-            _ => unreachable!(),
-        }
-    }
-
-    fn parse_precedence(&mut self, precedence: Precedence) {
-        self.advance();
-        let prefix_rule = Self::get_rule(self.previous_kind()).0;
-        if prefix_rule.is_none() {
-            self.error("Expect expression.");
-            return;
-        }
-
-        let can_assign = precedence <= Precedence::Assignment;
-        prefix_rule.unwrap()(self, can_assign);
-
-        while self.parser.current.is_some()
-            && precedence <= Self::get_rule(self.parser.current.as_ref().unwrap().kind).2
-        {
-            self.advance();
-            if let Some(infix_rule) = Self::get_rule(self.previous_kind()).1 {
-                infix_rule(self, can_assign);
-            }
-        }
-
-        if can_assign && self.match_current(TokenKind::Equal) {
-            self.error("Invalid assignment target.");
-        }
+    #[inline(always)]
+    fn get_current_len(&self) -> usize {
+        self.with_current_chunk(|chunk| chunk.code.len())
     }
 
     fn identifier_constant(&mut self, name: &str) -> u8 {
@@ -583,12 +266,11 @@ impl<'a> CompilerWrapper<'a> {
             })
     }
 
-    fn declare_variable(&mut self) {
+    fn declare_variable(&mut self, name: &'a Token<'a>) {
         if self.current.as_ref().unwrap().borrow().scope_depth == 0 {
             return;
         }
 
-        let name = &self.parser.previous.unwrap();
         let mut unique = true;
         for local in self.current.as_ref().unwrap().borrow().locals.iter().rev() {
             if local.depth.is_some()
@@ -610,24 +292,23 @@ impl<'a> CompilerWrapper<'a> {
         self.add_local(*name);
     }
 
-    fn parse_variable(&mut self, message: &str) -> u8 {
-        self.consume(TokenKind::Identifier, message);
-
-        self.declare_variable();
+    fn parse_variable(&mut self, token: &'a Token<'a>) -> u8 {
+        self.declare_variable(token);
         if self.current.as_ref().unwrap().borrow().scope_depth > 0 {
             return 0;
         }
 
-        return self.identifier_constant(self.parser.previous.as_ref().unwrap().lexeme);
+        return self.identifier_constant(token.lexeme);
     }
 
     fn mark_initialized(&mut self) {
-        let mut current = self.current.as_ref().unwrap().borrow_mut();
-        if current.scope_depth == 0 {
-            return;
-        }
-        let depth = current.scope_depth;
-        current.locals.last_mut().unwrap().depth = Some(depth);
+        self.with_current_mut(|current| {
+            if current.scope_depth == 0 {
+                return;
+            }
+            let depth = current.scope_depth;
+            current.locals.last_mut().unwrap().depth = Some(depth);
+        })
     }
 
     fn define_variable(&mut self, global: u8) {
@@ -639,266 +320,14 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_bytes(Op::DefineGlobal as u8, global)
     }
 
-    fn argument_list(&mut self) -> u8 {
-        let mut arg_count = 0;
-        if !self.check(TokenKind::RightParen) {
-            loop {
-                self.expression();
-                arg_count += 1;
-
-                if !self.match_current(TokenKind::Comma) {
-                    break;
-                }
-            }
-        }
-        self.consume(TokenKind::RightParen, "Expect ')' after arguments.");
-
-        match arg_count.try_into() {
-            Ok(count) => count,
-            _ => {
-                self.error("Can't have more than 255 arguments.");
-                0
-            }
-        }
-    }
-
-    fn and(&mut self, _can_assign: bool) {
-        let end_jump = self.emit_jump(Op::JumpIfFalse);
-
-        self.emit_op(Op::Pop);
-        self.parse_precedence(Precedence::And);
-
-        self.patch_jump(end_jump);
-    }
-
-    fn expression(&mut self) {
-        self.parse_precedence(Precedence::Assignment);
-    }
-
-    fn block(&mut self) {
-        while self.parser.current.is_some() && !self.check(TokenKind::RightBrace) {
-            self.declaration();
-        }
-
-        self.consume(TokenKind::RightBrace, "Expect '}' after block.")
-    }
-
-    fn function(&mut self, kind: FunctionKind) {
-        self.current = Some(Rc::new(RefCell::new(Compiler::new(
-            Some(self.current.as_ref().unwrap().clone()),
-            kind,
-            self.parser.previous.unwrap().lexeme,
-        ))));
-        self.begin_scope();
-
-        self.consume(TokenKind::LeftParen, "Expect '(' after function name.");
-        if !self.check(TokenKind::RightParen) {
-            loop {
-                let arity = self.with_current_function_mut(|fun| {
-                    fun.arity += 1;
-                    fun.arity
-                });
-                if arity > 255 {
-                    self.error_at_current("Can't have more than 255 parameters.");
-                }
-                let constant = self.parse_variable("Expect parameter name.");
-                self.define_variable(constant);
-
-                if !self.match_current(TokenKind::Comma) {
-                    break;
-                }
-            }
-        }
-        self.consume(TokenKind::RightParen, "Expect ')' after parameters.");
-        self.consume(TokenKind::LeftBrace, "Expect '{' before function body.");
-        self.block();
-
-        let compiler = self.end_compiler();
-        let constant = self.make_constant(Value::Function(compiler.function));
-        self.emit_bytes(Op::Closure as u8, constant);
-
-        for Upvalue { index, is_local } in compiler.upvalues {
-            self.emit_byte(if is_local { 1 } else { 0 });
-            self.emit_byte(index);
-        }
-    }
-
-    fn fun_declaration(&mut self) {
-        let global = self.parse_variable("Expect function name.");
-        self.mark_initialized();
-        self.function(FunctionKind::Function);
-        self.define_variable(global);
-    }
-
-    fn var_declaration(&mut self) {
-        let global = self.parse_variable("Expect variable name.");
-
-        if self.match_current(TokenKind::Equal) {
-            self.expression();
-        } else {
-            self.emit_op(Op::Nil);
-        }
-
-        self.consume(
-            TokenKind::Semicolon,
-            "Expect ';' after variable declaration.",
-        );
-        self.define_variable(global);
-    }
-
-    fn expression_statement(&mut self) {
-        self.expression();
-        self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
-        self.emit_op(Op::Pop)
-    }
-
-    fn for_statement(&mut self) {
-        self.begin_scope();
-        self.consume(TokenKind::LeftParen, "Expect '(' after 'for'.");
-        if self.match_current(TokenKind::Semicolon) {
-        } else if self.match_current(TokenKind::Var) {
-            self.var_declaration();
-        } else {
-            self.expression_statement();
-        }
-
-        let mut loop_start = self.with_current_chunk(|chunk| chunk.code.len());
-        let mut exit_jump = None;
-
-        if !self.match_current(TokenKind::Semicolon) {
-            self.expression();
-            self.consume(TokenKind::Semicolon, "Expect ';' after loop condition.");
-
-            exit_jump = Some(self.emit_jump(Op::JumpIfFalse));
-            self.emit_op(Op::Pop);
-        }
-
-        if !self.match_current(TokenKind::RightParen) {
-            let body_jump = self.emit_jump(Op::Jump);
-            let increment_start = self.with_current_chunk(|chunk| chunk.code.len());
-            self.expression();
-            self.emit_op(Op::Pop);
-            self.consume(TokenKind::RightParen, "Expect ')' after for clauses.");
-
-            self.emit_loop(loop_start);
-            loop_start = increment_start;
-            self.patch_jump(body_jump);
-        }
-
-        self.statement();
-        self.emit_loop(loop_start);
-
-        if let Some(offset) = exit_jump {
-            self.patch_jump(offset);
-            self.emit_op(Op::Pop);
-        }
-
-        self.end_scope();
-    }
-
-    fn if_statement(&mut self) {
-        self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.");
-        self.expression();
-        self.consume(TokenKind::RightParen, "Expect ')' after condition.");
-
-        let then_jump = self.emit_jump(Op::JumpIfFalse);
-        self.emit_op(Op::Pop);
-        self.statement();
-
-        let else_jump = self.emit_jump(Op::Jump);
-        self.patch_jump(then_jump);
-        self.emit_op(Op::Pop);
-
-        if self.match_current(TokenKind::Else) {
-            self.statement();
-        }
-        self.patch_jump(else_jump);
-    }
-
-    fn return_statement(&mut self) {
-        if self.current.as_ref().unwrap().borrow().function_kind == FunctionKind::Script {
-            self.error("Can't return from top-level code.");
-        }
-
-        if self.match_current(TokenKind::Semicolon) {
-            self.emit_return();
-        } else {
-            self.expression();
-            self.consume(TokenKind::Semicolon, "Expect ';' after return value.");
-            self.emit_op(Op::Return);
-        }
-    }
-
-    fn print_statement(&mut self) {
-        self.expression();
-        self.consume(TokenKind::Semicolon, "Expect ';' after value.");
-        self.emit_op(Op::Print)
-    }
-
-    fn while_statement(&mut self) {
-        let loop_start = self.with_current_chunk(|chunk| chunk.code.len());
-        self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.");
-        self.expression();
-        self.consume(TokenKind::RightParen, "Expect ')' after condition.");
-
-        let exit_jump = self.emit_jump(Op::JumpIfFalse);
-        self.emit_op(Op::Pop);
-        self.statement();
-        self.emit_loop(loop_start);
-
-        self.patch_jump(exit_jump);
-        self.emit_op(Op::Pop);
-    }
-
-    fn synchronize(&mut self) {
-        while self.parser.current.is_some() {
-            if self.previous_kind() == TokenKind::Semicolon {
-                return;
-            }
-            match self.parser.current.as_ref().unwrap().kind {
-                TokenKind::Fun
-                | TokenKind::Var
-                | TokenKind::For
-                | TokenKind::If
-                | TokenKind::While
-                | TokenKind::Print
-                | TokenKind::Return => return,
-                _ => self.advance(),
-            }
-        }
-    }
-
-    fn declaration(&mut self) {
-        if self.match_current(TokenKind::Fun) {
-            self.fun_declaration();
-        } else if self.match_current(TokenKind::Var) {
-            self.var_declaration();
-        } else {
-            self.statement();
-        }
-
-        if self.parser.panic_mode {
-            self.synchronize();
-        }
-    }
-
-    fn statement(&mut self) {
-        if self.match_current(TokenKind::Print) {
-            self.print_statement();
-        } else if self.match_current(TokenKind::For) {
-            self.for_statement();
-        } else if self.match_current(TokenKind::If) {
-            self.if_statement();
-        } else if self.match_current(TokenKind::Return) {
-            self.return_statement();
-        } else if self.match_current(TokenKind::While) {
-            self.while_statement();
-        } else if self.match_current(TokenKind::LeftBrace) {
-            self.begin_scope();
-            self.block();
-            self.end_scope();
-        } else {
-            self.expression_statement();
+    fn patch_breaks(&mut self) {
+        while self
+            .breaks
+            .last()
+            .map_or(false, |(_, depth)| *depth == self.loop_depth)
+        {
+            let (jump, _) = self.breaks.pop().unwrap();
+            self.patch_jump(jump);
         }
     }
 
@@ -911,9 +340,7 @@ impl<'a> CompilerWrapper<'a> {
         {
             #![cfg(feature = "trace-execution")]
             let function = &compiler.function;
-            if !self.parser.had_error {
-                function.chunk.disassemble(function.get_name());
-            }
+            function.chunk.disassemble(function.get_name());
         }
         self.current = std::mem::take(&mut compiler.enclosing);
         compiler
@@ -925,7 +352,7 @@ impl<'a> CompilerWrapper<'a> {
 
     fn end_scope(&mut self) {
         let ops = self.with_current_mut(|current| {
-            let mut ops: Vec<Op> = vec![];
+            let mut ops: Vec<Op> = Vec::new();
             current.scope_depth -= 1;
 
             while let Some(local) = current.locals.last() {
@@ -949,30 +376,361 @@ impl<'a> CompilerWrapper<'a> {
         }
     }
 
-    fn compile(&mut self) -> Result<Function, InterpretError> {
-        self.advance();
-
-        while self.parser.current.is_some() {
-            self.declaration();
+    fn compile(
+        &mut self,
+        statements: std::vec::IntoIter<Stmt<'a>>,
+    ) -> Result<Function, InterpretError> {
+        for statement in statements {
+            self.statement(&statement)
         }
 
-        let had_error = self.parser.had_error;
         let compiler = self.end_compiler();
-        if had_error {
-            Err(InterpretError::CompileError)
-        } else {
-            Ok(compiler.function)
+        Ok(compiler.function)
+    }
+
+    fn error(&mut self, _message: &'static str) {
+        todo!()
+    }
+
+    fn statement(&mut self, statement: &Stmt<'a>) {
+        match statement {
+            Stmt::Break(statement) => self.break_statement(statement),
+            Stmt::Block(statement) => {
+                for stmt in &statement.statements {
+                    self.statement(stmt);
+                }
+            }
+            Stmt::Continue(statement) => self.continue_statement(statement),
+            Stmt::Expression(statement) => self.expression(&statement.expression),
+            Stmt::For(statement) => self.for_statement(statement),
+            Stmt::Function(statement) => self.fun_declaration(statement),
+            Stmt::If(statement) => self.if_statement(statement),
+            Stmt::Print(statement) => self.print_statement(statement),
+            Stmt::Return(statement) => self.return_statement(statement),
+            Stmt::While(statement) => self.while_statement(statement),
+            Stmt::Var(statement) => self.var_declaration(statement),
         }
+    }
+
+    fn break_statement(&mut self, _statement: &stmt::Break) {
+        let jump = self.emit_jump(Op::Jump);
+        let depth = self.loop_depth;
+        self.breaks.push((jump, depth))
+    }
+
+    fn continue_statement(&mut self, _statement: &stmt::Continue) {
+        self.emit_loop(self.continue_point);
+    }
+
+    fn function(&mut self, function: &stmt::Function<'a>) {
+        self.current = Some(Rc::new(RefCell::new(Compiler::new(
+            Some(self.current.as_ref().unwrap().clone()),
+            function.name.lexeme,
+        ))));
+        self.with_current_function_mut(|fun| fun.arity = function.params.len());
+        self.begin_scope();
+
+        for token in &function.params {
+            let constant = self.parse_variable(token);
+            self.define_variable(constant);
+        }
+
+        for stmt in &function.body {
+            self.statement(stmt)
+        }
+
+        let compiler = self.end_compiler();
+        let constant = self.make_constant(Value::Function(compiler.function));
+        self.emit_bytes(Op::Closure as u8, constant);
+
+        for Upvalue { index, is_local } in compiler.upvalues {
+            self.emit_byte(is_local.into());
+            self.emit_byte(index);
+        }
+    }
+
+    fn for_statement(&mut self, statement: &stmt::For<'a>) {
+        self.begin_scope();
+
+        if let Some(stmt) = &statement.initializer {
+            self.statement(stmt);
+        }
+
+        let mut before_condition: Option<usize> = None;
+        let mut jump_after_cond: Option<usize> = None;
+        let mut jump_to_body: Option<usize> = None;
+
+        if let Some(cond) = &statement.condition {
+            before_condition = Some(self.get_current_len());
+            self.expression(cond);
+            jump_after_cond = Some(self.emit_jump(Op::JumpIfFalse));
+            self.emit_op(Op::Pop);
+            jump_to_body = Some(self.emit_jump(Op::Jump));
+        }
+
+        let mut before_increment: Option<usize> = None;
+
+        if let Some(incr) = &statement.increment {
+            before_increment = Some(self.get_current_len());
+            self.expression(incr);
+            if let Some(loop_point) = before_condition {
+                self.emit_loop(loop_point)
+            }
+        }
+
+        let before_body = self.get_current_len();
+
+        if let Some(jump) = jump_to_body {
+            self.patch_jump(jump);
+        }
+
+        self.loop_depth += 1;
+
+        let enclosing_continue_point = self.continue_point;
+        self.continue_point = if let Some(incr) = before_increment {
+            incr
+        } else if let Some(cond) = before_condition {
+            cond
+        } else {
+            before_body
+        };
+
+        self.statement(&statement.body);
+
+        self.emit_loop(self.continue_point);
+
+        if let Some(jump) = jump_after_cond {
+            self.patch_jump(jump);
+        }
+
+        self.patch_breaks();
+        self.continue_point = enclosing_continue_point;
+        self.loop_depth -= 1;
+
+        self.end_scope();
+    }
+
+    fn fun_declaration(&mut self, function: &stmt::Function<'a>) {
+        let global = self.parse_variable(function.name);
+        self.mark_initialized();
+        self.function(function);
+        self.define_variable(global);
+    }
+
+    fn if_statement(&mut self, statement: &stmt::If<'a>) {
+        self.expression(&statement.condition);
+
+        let jump_to_else = self.emit_jump(Op::JumpIfFalse);
+        self.emit_op(Op::Pop);
+        self.statement(statement.then_branch.as_ref());
+
+        let jump_from_then = self.emit_jump(Op::Jump);
+        self.patch_jump(jump_to_else);
+        self.emit_op(Op::Pop);
+
+        if let Some(stmt) = &statement.else_branch {
+            self.statement(stmt.as_ref());
+        }
+        self.patch_jump(jump_from_then);
+    }
+
+    fn print_statement(&mut self, statement: &stmt::Print) {
+        self.expression(&statement.expression);
+        self.emit_op(Op::Print)
+    }
+
+    fn return_statement(&mut self, statement: &stmt::Return) {
+        if let Some(value) = &statement.value {
+            self.expression(value)
+        } else {
+            self.emit_op(Op::Nil)
+        }
+
+        self.emit_op(Op::Return)
+    }
+
+    fn while_statement(&mut self, statement: &stmt::While<'a>) {
+        let enclosing_continue_point = self.continue_point;
+        self.continue_point = self.get_current_len();
+        self.loop_depth += 1;
+
+        self.expression(&statement.condition);
+        let end_jump = self.emit_jump(Op::JumpIfFalse);
+        self.emit_op(Op::Pop);
+
+        self.statement(statement.body.as_ref());
+        self.emit_loop(self.continue_point);
+        self.patch_jump(end_jump);
+        self.emit_op(Op::Pop);
+
+        self.patch_breaks();
+
+        self.loop_depth -= 1;
+        self.continue_point = enclosing_continue_point;
+    }
+
+    fn var_declaration(&mut self, statement: &stmt::Var<'a>) {
+        let global = self.parse_variable(statement.name);
+
+        if let Some(expr) = &statement.initializer {
+            self.expression(expr);
+        } else {
+            self.emit_op(Op::Nil);
+        }
+
+        self.define_variable(global);
+    }
+
+    fn expression(&mut self, expression: &Expr) {
+        match expression {
+            Expr::Assign(expr) => self.assignment(expr),
+            Expr::Binary(expr) => self.binary(expr),
+            Expr::Call(expr) => self.call(expr),
+            Expr::Literal(expr) => self.literal(expr),
+            Expr::Logical(expr) => self.logical(expr),
+            Expr::Unary(expr) => self.unary(expr),
+            Expr::Variable(expr) => self.variable(expr),
+        }
+    }
+
+    fn assignment(&mut self, assignment: &expr::Assign) {
+        self.expression(assignment.value.as_ref());
+
+        let name = assignment.name.lexeme;
+        let (set_op, arg) = if let (Some(arg), err) = self.with_current(|c| c.resolve_local(name)) {
+            if let Some(message) = err {
+                self.error(message)
+            }
+            (Op::SetLocal, arg)
+        } else if let (Some(arg), err) = self.with_current_mut(|c| c.resolve_upvalue(name)) {
+            if let Some(message) = err {
+                self.error(message)
+            }
+            (Op::SetUpvalue, arg)
+        } else {
+            (Op::SetGlobal, self.identifier_constant(name))
+        };
+
+        self.emit_bytes(set_op as u8, arg);
+        self.emit_op(Op::Pop);
+    }
+
+    fn binary(&mut self, binary: &expr::Binary) {
+        self.expression(binary.left.as_ref());
+        self.expression(binary.right.as_ref());
+
+        self.current_line = binary.operator.line;
+        match binary.operator.kind {
+            TokenKind::BangEqual => self.emit_ops(Op::Equal, Op::Not),
+            TokenKind::EqualEqual => self.emit_op(Op::Equal),
+            TokenKind::Greater => self.emit_op(Op::Greater),
+            TokenKind::GreaterEqual => self.emit_ops(Op::Less, Op::Not),
+            TokenKind::Less => self.emit_op(Op::Less),
+            TokenKind::LessEqual => self.emit_ops(Op::Greater, Op::Not),
+            TokenKind::Plus => self.emit_op(Op::Add),
+            TokenKind::Minus => self.emit_op(Op::Subtract),
+            TokenKind::Slash => self.emit_op(Op::Divide),
+            TokenKind::Star => self.emit_op(Op::Multiply),
+            _ => unreachable!(),
+        }
+    }
+
+    fn call(&mut self, call: &expr::Call) {
+        self.expression(&call.callee);
+        for arg in &call.args {
+            self.expression(arg);
+        }
+        self.emit_bytes(Op::Call as u8, call.args.len() as u8);
+    }
+
+    fn literal(&mut self, literal: &expr::Literal) {
+        self.current_line = literal.value.line;
+        match literal.value.kind {
+            TokenKind::Nil => self.emit_op(Op::Nil),
+            TokenKind::False => self.emit_op(Op::False),
+            TokenKind::True => self.emit_op(Op::True),
+            TokenKind::Number => self.number(literal.value.lexeme),
+            TokenKind::String => self.string(literal.value.lexeme),
+            _ => unreachable!(),
+        }
+    }
+
+    fn logical(&mut self, logical: &expr::Logical) {
+        match logical.operator.kind {
+            TokenKind::And => self.and(logical),
+            TokenKind::Or => self.or(logical),
+            _ => unreachable!(),
+        }
+    }
+
+    fn unary(&mut self, unary: &expr::Unary) {
+        self.current_line = unary.operator.line;
+        self.expression(unary.right.as_ref());
+        match unary.operator.kind {
+            TokenKind::Bang => self.emit_op(Op::Not),
+            TokenKind::Minus => self.emit_op(Op::Negate),
+            _ => unreachable!(),
+        }
+    }
+
+    fn variable(&mut self, variable: &expr::Variable) {
+        let name = variable.name.lexeme;
+        let (get_op, arg) = if let (Some(arg), err) = self.with_current(|c| c.resolve_local(name)) {
+            if let Some(message) = err {
+                self.error(message)
+            }
+            (Op::GetLocal, arg)
+        } else if let (Some(arg), err) = self.with_current_mut(|c| c.resolve_upvalue(name)) {
+            if let Some(message) = err {
+                self.error(message)
+            }
+            (Op::GetUpvalue, arg)
+        } else {
+            (Op::GetGlobal, self.identifier_constant(name))
+        };
+
+        self.emit_bytes(get_op as u8, arg);
+    }
+
+    fn and(&mut self, logical: &expr::Logical) {
+        self.expression(logical.left.as_ref());
+        let jump = self.emit_jump(Op::JumpIfFalse);
+        self.emit_op(Op::Pop);
+
+        self.expression(logical.right.as_ref());
+        self.patch_jump(jump);
+    }
+
+    fn or(&mut self, logical: &expr::Logical) {
+        self.expression(logical.left.as_ref());
+        let else_jump = self.emit_jump(Op::JumpIfFalse);
+        let end_jump = self.emit_jump(Op::Jump);
+
+        self.patch_jump(else_jump);
+        self.emit_op(Op::Pop);
+        self.expression(logical.right.as_ref());
+
+        self.patch_jump(end_jump);
+    }
+
+    fn number(&mut self, lexeme: &str) {
+        let value: f64 = lexeme.parse().expect("Failed to parse string into float");
+        self.emit_constant(Value::Number(value))
+    }
+
+    fn string(&mut self, lexeme: &str) {
+        let handle = string::Handle::from_str(&lexeme[1..lexeme.len() - 1]);
+        self.emit_constant(Value::String(handle))
     }
 }
 
 pub fn compile(source: &String) -> Result<Function, InterpretError> {
-    let mut scanner = Scanner::new(source);
-    let mut compiler = CompilerWrapper::new(&mut scanner);
-    compiler.current = Some(Rc::new(RefCell::new(Compiler::new(
-        None,
-        FunctionKind::Script,
-        "",
-    ))));
-    compiler.compile()
+    let tokens = scanner::scan_tokens(source);
+    let statements = parser::parse_tokens(&tokens);
+    if statements.is_none() {
+        return Err(InterpretError::CompileError);
+    }
+    let statements = statements.unwrap().into_iter();
+    let mut compiler = CompilerWrapper::new();
+    compiler.compile(statements)
 }
