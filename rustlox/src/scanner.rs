@@ -1,4 +1,4 @@
-use std::iter::{Enumerate, Peekable};
+use std::iter::Peekable;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
@@ -62,7 +62,7 @@ struct Scanner<'a> {
     source: &'a String,
     pub lines: i32,
     start: usize,
-    iter: Peekable<Enumerate<std::str::Chars<'a>>>,
+    iter: Peekable<std::str::CharIndices<'a>>,
 }
 
 impl<'a> Scanner<'a> {
@@ -71,7 +71,7 @@ impl<'a> Scanner<'a> {
             source,
             lines: 1,
             start: 0,
-            iter: source.chars().enumerate().peekable(),
+            iter: source.char_indices().peekable(),
         }
     }
 
