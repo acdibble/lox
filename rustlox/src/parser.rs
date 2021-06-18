@@ -127,8 +127,8 @@ impl<'a> Parser<'a> {
 
         let mut params: Vec<&'a Token<'a>> = Vec::new();
 
-        loop {
-            if !self.check(TokenKind::RightParen) {
+        if !self.check(TokenKind::RightParen) {
+            loop {
                 if params.len() >= 255 {
                     self.error(self.peek(), "Can't have more than 255 parameters.");
                 }
