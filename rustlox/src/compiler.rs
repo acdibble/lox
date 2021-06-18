@@ -457,6 +457,7 @@ impl<'a> CompilerWrapper<'a> {
         for stmt in &function.body {
             self.statement(stmt)?
         }
+        self.current_line = function.brace.line;
 
         let compiler = self.end_compiler();
         let constant = self.make_constant(Value::Function(compiler.function));
@@ -556,12 +557,14 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn print_statement(&mut self, statement: &stmt::Print) -> CompileResult {
+        self.current_line = statement.keyword.line;
         self.expression(&statement.expression)?;
         self.emit_op(Op::Print);
         Ok(())
     }
 
     fn return_statement(&mut self, statement: &stmt::Return) -> CompileResult {
+        self.current_line = statement.keyword.line;
         if let Some(value) = &statement.value {
             self.expression(value)?
         } else {
@@ -716,6 +719,7 @@ impl<'a> CompilerWrapper<'a> {
 
     fn variable(&mut self, variable: &expr::Variable) -> CompileResult {
         let name = variable.name.lexeme;
+        self.current_line = variable.name.line;
         let (get_op, arg) = self.get_arg(name, Op::GetLocal, Op::GetUpvalue, Op::GetGlobal)?;
         self.emit_bytes(get_op as u8, arg);
         Ok(())

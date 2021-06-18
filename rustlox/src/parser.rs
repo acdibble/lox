@@ -151,6 +151,7 @@ impl<'a> Parser<'a> {
             params,
             body,
             kind,
+            brace: self.previous().unwrap(),
         }))
     }
 
@@ -256,9 +257,13 @@ impl<'a> Parser<'a> {
     }
 
     fn print_statement(&mut self) -> ParseResult<Stmt<'a>> {
+        let keyword = self.previous().unwrap();
         let expr = self.expression()?;
         self.consume(TokenKind::Semicolon, "Expect ';' after value.")?;
-        Ok(Stmt::Print(stmt::Print { expression: expr }))
+        Ok(Stmt::Print(stmt::Print {
+            keyword,
+            expression: expr,
+        }))
     }
 
     fn return_statement(&mut self) -> ParseResult<Stmt<'a>> {

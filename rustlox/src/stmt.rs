@@ -41,6 +41,7 @@ pub struct Function<'a> {
     pub params: Vec<&'a Token<'a>>,
     pub body: Vec<Stmt<'a>>,
     pub kind: FunctionKind,
+    pub brace: &'a Token<'a>,
 }
 
 #[derive(Debug)]
@@ -52,6 +53,7 @@ pub struct If<'a> {
 
 #[derive(Debug)]
 pub struct Print<'a> {
+    pub keyword: &'a Token<'a>,
     pub expression: Expr<'a>,
 }
 
