@@ -126,7 +126,7 @@ impl VM {
 
             eprint!("[line {}] in ", line);
             match function.get_name() {
-                "script" => eprintln!("script"),
+                "<script>" => eprintln!("script"),
                 name => eprintln!("{}()", name),
             }
         }
