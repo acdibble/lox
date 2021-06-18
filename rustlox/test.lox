@@ -1,8 +1,9 @@
-fun fib(n) {
-  if (n < 2) return n;
-  return fib(n - 2) + fib(n - 1);
+fun outer() {
+  var x = "before";
+  fun inner() {
+    x = "assigned";
+  }
+  inner();
+  print x;
 }
-
-var start = clock();
-print fib(30);
-print clock() - start;
+outer();

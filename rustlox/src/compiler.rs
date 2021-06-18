@@ -88,10 +88,9 @@ impl<'a> Compiler<'a> {
 
         self.upvalues.push(Upvalue { is_local, index });
         self.function.upvalue_count += 1;
-        match (self.upvalues.len() - 1).try_into() {
-            Ok(value) => Ok(value),
-            _ => Err("Too many closure variables in function."),
-        }
+        (self.upvalues.len() - 1)
+            .try_into()
+            .or(Err("Too many closure variables in function."))
     }
 
     fn resolve_upvalue(&mut self, name: &str) -> Result<Option<u8>, &'static str> {

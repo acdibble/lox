@@ -212,7 +212,7 @@ impl VM {
     }
 
     #[inline(always)]
-    fn capture_upvalue(&mut self, location: *const Value) -> Rc<RefCell<Upvalue>> {
+    fn capture_upvalue(&mut self, location: *mut Value) -> Rc<RefCell<Upvalue>> {
         let mut previous: Option<Rc<RefCell<Upvalue>>> = None;
         let mut current: &mut Option<Rc<RefCell<Upvalue>>> = &mut self.open_upvalues;
         let mut _temp: Option<Rc<RefCell<Upvalue>>> = None;
@@ -405,7 +405,7 @@ impl VM {
                         [slot]
                         .borrow_mut();
 
-                    upvalue.closed = value;
+                    upvalue.set_value(value);
                 }
                 Op::Equal => {
                     let b = self.pop()?;
@@ -483,7 +483,8 @@ impl VM {
                         let is_local = self.read_u8()?;
                         let index = self.read_u8()? as usize;
                         let upvalue = if is_local == 1 {
-                            self.capture_upvalue(&self.stack[offset + index])
+                            let value: *mut Value = &mut self.stack[offset + index];
+                            self.capture_upvalue(value)
                         } else {
                             self.current_frame().closure.as_ref().unwrap().upvalues[i].clone()
                         };

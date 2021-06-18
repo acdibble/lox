@@ -54,7 +54,7 @@ impl Drop for Closure {
 
 #[derive(Clone, Debug)]
 pub struct Upvalue {
-    pub location: *const Value,
+    pub location: *mut Value,
     pub next: Option<Rc<RefCell<Upvalue>>>,
     pub closed: Value,
 }
@@ -67,7 +67,7 @@ impl Drop for Upvalue {
 }
 
 impl Upvalue {
-    pub fn new(location: *const Value, next: Option<Rc<RefCell<Upvalue>>>) -> Upvalue {
+    pub fn new(location: *mut Value, next: Option<Rc<RefCell<Upvalue>>>) -> Upvalue {
         Upvalue {
             location,
             next,
@@ -77,12 +77,16 @@ impl Upvalue {
 
     pub fn close(&mut self) {
         unsafe { self.closed = (*self.location).clone() };
-        self.location = &self.closed;
+        self.location = &mut self.closed;
         self.next = None;
     }
 
     pub fn as_value(&self) -> Value {
         unsafe { (*self.location).clone() }
+    }
+
+    pub fn set_value(&mut self, value: Value) {
+        unsafe { *self.location = value }
     }
 }
 

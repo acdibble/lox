@@ -206,7 +206,7 @@ impl Chunk {
             .code
             .get(offset + 1)
             .expect("Could not get constant index");
-        print!("{:16} {:04} '", name, constant);
+        print!("{:16} {:4} '", name, constant);
         &self.constants[constant as usize].print();
         println!("'");
         return offset + 2;
