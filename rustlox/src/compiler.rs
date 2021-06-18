@@ -122,10 +122,9 @@ impl<'a> Compiler<'a> {
 struct CompilerWrapper<'a> {
     current: Option<Rc<RefCell<Compiler<'a>>>>,
     current_line: i32,
-
-    continue_point: usize,
-    breaks: Vec<(usize, usize)>,
-    loop_depth: usize,
+    // continues: Vec<(usize, usize)>,
+    // breaks: Vec<(usize, usize)>,
+    // loop_depth: usize,
 }
 
 impl<'a> CompilerWrapper<'a> {
@@ -133,9 +132,9 @@ impl<'a> CompilerWrapper<'a> {
         CompilerWrapper {
             current: Some(Rc::new(RefCell::new(Compiler::new(None, "")))),
             current_line: 0,
-            continue_point: 0,
-            breaks: Vec::new(),
-            loop_depth: 0,
+            // continues: Vec::new(),
+            // breaks: Vec::new(),
+            // loop_depth: 0,
         }
     }
 
@@ -320,16 +319,16 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_bytes(Op::DefineGlobal as u8, global)
     }
 
-    fn patch_breaks(&mut self) {
-        while self
-            .breaks
-            .last()
-            .map_or(false, |(_, depth)| *depth == self.loop_depth)
-        {
-            let (jump, _) = self.breaks.pop().unwrap();
-            self.patch_jump(jump);
-        }
-    }
+    // fn patch_breaks(&mut self) {
+    //     while self
+    //         .breaks
+    //         .last()
+    //         .map_or(false, |(_, depth)| *depth == self.loop_depth)
+    //     {
+    //         let (jump, _) = self.breaks.pop().unwrap();
+    //         self.patch_jump(jump);
+    //     }
+    // }
 
     fn end_compiler(&mut self) -> Compiler<'a> {
         self.emit_return();
@@ -394,14 +393,8 @@ impl<'a> CompilerWrapper<'a> {
 
     fn statement(&mut self, statement: &Stmt<'a>) {
         match statement {
-            Stmt::Block(statement) => {
-                for stmt in &statement.statements {
-                    self.statement(stmt);
-                }
-            }
-            Stmt::Break(statement) => self.break_statement(statement),
-            Stmt::Continue(statement) => self.continue_statement(statement),
-            Stmt::Expression(statement) => self.expression(&statement.expression),
+            // Stmt::Break(statement) => self.break_statement(statement),
+            // Stmt::Continue(statement) => self.continue_statement(statement),
             Stmt::For(statement) => self.for_statement(statement),
             Stmt::Function(statement) => self.fun_declaration(statement),
             Stmt::If(statement) => self.if_statement(statement),
@@ -422,7 +415,16 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_loop(self.continue_point);
     }
 
-    fn function(&mut self, function: &stmt::Function<'a>) {
+    // fn break_statement(&mut self, _statement: &stmt::Break) {
+    //     let jump = self.emit_jump(Op::Jump);
+    //     let depth = self.loop_depth;
+    //     self.breaks.push((jump, depth))
+    // }
+
+    // fn continue_statement(&mut self, _statement: &stmt::Continue) {
+    //     self.emit_loop(self.continue_point);
+    // }
+
         self.current = Some(Rc::new(RefCell::new(Compiler::new(
             Some(self.current.as_ref().unwrap().clone()),
             function.name.lexeme,
@@ -484,7 +486,8 @@ impl<'a> CompilerWrapper<'a> {
             self.patch_jump(jump);
         }
 
-        self.loop_depth += 1;
+        // self.loop_depth += 1;
+        // let enclosing_continue_point = self.continue_point;
 
         let enclosing_continue_point = self.continue_point;
         self.continue_point = if let Some(incr) = before_increment {
@@ -503,9 +506,9 @@ impl<'a> CompilerWrapper<'a> {
             self.patch_jump(jump);
         }
 
-        self.patch_breaks();
-        self.continue_point = enclosing_continue_point;
-        self.loop_depth -= 1;
+        // self.patch_breaks();
+        // self.continue_point = enclosing_continue_point;
+        // self.loop_depth -= 1;
 
         self.end_scope();
     }
@@ -549,10 +552,10 @@ impl<'a> CompilerWrapper<'a> {
         self.emit_op(Op::Return)
     }
 
-    fn while_statement(&mut self, statement: &stmt::While<'a>) {
-        let enclosing_continue_point = self.continue_point;
-        self.continue_point = self.get_current_len();
-        self.loop_depth += 1;
+        let loop_start = self.get_current_len();
+        // let enclosing_continue_point = self.continue_point;
+        // self.continue_point = self.get_current_len();
+        // self.loop_depth += 1;
 
         self.expression(&statement.condition);
         let end_jump = self.emit_jump(Op::JumpIfFalse);
@@ -563,10 +566,9 @@ impl<'a> CompilerWrapper<'a> {
         self.patch_jump(end_jump);
         self.emit_op(Op::Pop);
 
-        self.patch_breaks();
-
-        self.loop_depth -= 1;
-        self.continue_point = enclosing_continue_point;
+        // self.patch_breaks();
+        // self.loop_depth -= 1;
+        // self.continue_point = enclosing_continue_point;
     }
 
     fn var_declaration(&mut self, statement: &stmt::Var<'a>) {

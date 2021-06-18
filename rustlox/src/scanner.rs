@@ -30,9 +30,9 @@ pub enum TokenKind {
     Number,
     // Keywords.
     And,
-    Break,
+    // Break,
     Class,
-    Continue,
+    // Continue,
     Else,
     False,
     For,
@@ -180,9 +180,9 @@ impl<'a> Scanner<'a> {
         let lexeme = self.get_lexeme();
         let kind = match lexeme {
             "and" => TokenKind::And,
-            "break" => TokenKind::Break,
+            // "break" => TokenKind::Break,
             "class" => TokenKind::Class,
-            "continue" => TokenKind::Continue,
+            // "continue" => TokenKind::Continue,
             "else" => TokenKind::Else,
             "false" => TokenKind::False,
             "for" => TokenKind::For,

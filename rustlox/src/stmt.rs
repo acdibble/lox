@@ -6,15 +6,15 @@ pub struct Block<'a> {
     pub statements: Vec<Stmt<'a>>,
 }
 
-#[derive(Debug)]
-pub struct Break<'a> {
-    pub keyword: &'a Token<'a>,
-}
+// #[derive(Debug)]
+// pub struct Break<'a> {
+//     pub keyword: &'a Token<'a>,
+// }
 
-#[derive(Debug)]
-pub struct Continue<'a> {
-    pub keyword: &'a Token<'a>,
-}
+// #[derive(Debug)]
+// pub struct Continue<'a> {
+//     pub keyword: &'a Token<'a>,
+// }
 
 #[derive(Debug)]
 pub struct Expression<'a> {
@@ -76,8 +76,8 @@ pub struct While<'a> {
 #[derive(Debug)]
 pub enum Stmt<'a> {
     Block(Block<'a>),
-    Break(Break<'a>),
-    Continue(Continue<'a>),
+    // Break(Break<'a>),
+    // Continue(Continue<'a>),
     Expression(Expression<'a>),
     For(For<'a>),
     Function(Function<'a>),

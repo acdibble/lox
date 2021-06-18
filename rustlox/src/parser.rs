@@ -173,12 +173,12 @@ impl<'a> Parser<'a> {
         if self.match_current(TokenKind::LeftBrace) {
             return self.block_statement();
         }
-        if self.match_current(TokenKind::Break) {
-            return self.break_statement();
-        }
-        if self.match_current(TokenKind::Continue) {
-            return self.continue_statement();
-        }
+        // if self.match_current(TokenKind::Break) {
+        //     return self.break_statement();
+        // }
+        // if self.match_current(TokenKind::Continue) {
+        //     return self.continue_statement();
+        // }
         self.expression_statement()
     }
 
@@ -302,25 +302,25 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn break_statement(&mut self) -> ParseResult<Stmt<'a>> {
-        if self.loop_kind == Loop::None {
-            self.error(self.previous(), "Unexpected 'break' statement.");
-        }
-        self.consume(TokenKind::Semicolon, "Expect ';' after 'break'.")?;
-        Ok(Stmt::Break(stmt::Break {
-            keyword: self.previous().unwrap(),
-        }))
-    }
+    // fn break_statement(&mut self) -> ParseResult<Stmt<'a>> {
+    //     if self.loop_kind == Loop::None {
+    //         self.error(self.previous(), "Unexpected 'break' statement.");
+    //     }
+    //     self.consume(TokenKind::Semicolon, "Expect ';' after 'break'.")?;
+    //     Ok(Stmt::Break(stmt::Break {
+    //         keyword: self.previous().unwrap(),
+    //     }))
+    // }
 
-    fn continue_statement(&mut self) -> ParseResult<Stmt<'a>> {
-        if self.loop_kind == Loop::None {
-            self.error(self.previous(), "Unexpected 'continue' statement.");
-        }
-        self.consume(TokenKind::Semicolon, "Expect ';' after 'continue'.")?;
-        Ok(Stmt::Continue(stmt::Continue {
-            keyword: self.previous().unwrap(),
-        }))
-    }
+    // fn continue_statement(&mut self) -> ParseResult<Stmt<'a>> {
+    //     if self.loop_kind == Loop::None {
+    //         self.error(self.previous(), "Unexpected 'continue' statement.");
+    //     }
+    //     self.consume(TokenKind::Semicolon, "Expect ';' after 'continue'.")?;
+    //     Ok(Stmt::Continue(stmt::Continue {
+    //         keyword: self.previous().unwrap(),
+    //     }))
+    // }
 
     fn expression_statement(&mut self) -> ParseResult<Stmt<'a>> {
         let expr = self.expression()?;
