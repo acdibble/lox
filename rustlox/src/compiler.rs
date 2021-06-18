@@ -586,6 +586,7 @@ impl<'a> CompilerWrapper<'a> {
             Expr::Assign(expr) => self.assignment(expr),
             Expr::Binary(expr) => self.binary(expr),
             Expr::Call(expr) => self.call(expr),
+            Expr::Grouping(expr) => self.expression(&expr.expr),
             Expr::Literal(expr) => self.literal(expr),
             Expr::Logical(expr) => self.logical(expr),
             Expr::Unary(expr) => self.unary(expr),

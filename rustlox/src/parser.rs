@@ -521,6 +521,12 @@ impl<'a> Parser<'a> {
             }));
         }
 
+        if self.match_current(TokenKind::LeftParen) {
+            let expr = Box::from(self.expression()?);
+            self.consume(TokenKind::RightParen, "Expect ')' after expression")?;
+            return Ok(Expr::Grouping(expr::Grouping { expr }));
+        }
+
         self.error(self.peek(), "Expected expression.");
         Err(())
     }

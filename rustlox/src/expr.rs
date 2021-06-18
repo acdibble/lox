@@ -21,6 +21,11 @@ pub struct Call<'a> {
 }
 
 #[derive(Debug)]
+pub struct Grouping<'a> {
+    pub expr: Box<Expr<'a>>,
+}
+
+#[derive(Debug)]
 pub struct Literal<'a> {
     pub value: &'a Token<'a>,
 }
@@ -48,6 +53,7 @@ pub enum Expr<'a> {
     Assign(Assign<'a>),
     Binary(Binary<'a>),
     Call(Call<'a>),
+    Grouping(Grouping<'a>),
     Literal(Literal<'a>),
     Logical(Logical<'a>),
     Unary(Unary<'a>),
