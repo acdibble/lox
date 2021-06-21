@@ -491,8 +491,12 @@ impl<'a> CompilerWrapper<'a> {
         let mut before_increment: Option<usize> = None;
 
         if let Some(incr) = &statement.increment {
+            if jump_to_body.is_none() {
+                jump_to_body = Some(self.emit_jump(Op::Jump));
+            }
             before_increment = Some(self.get_current_len());
             self.expression(incr)?;
+            self.emit_op(Op::Pop);
             if let Some(loop_point) = before_condition {
                 self.emit_loop(loop_point)?
             }
@@ -519,6 +523,7 @@ impl<'a> CompilerWrapper<'a> {
 
         if let Some(jump) = jump_after_cond {
             self.patch_jump(jump)?;
+            self.emit_op(Op::Pop);
         }
 
         // self.patch_breaks();
