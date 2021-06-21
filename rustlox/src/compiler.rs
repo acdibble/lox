@@ -80,9 +80,9 @@ impl<'a> Compiler<'a> {
     }
 
     fn add_upvalue(&mut self, index: u8, is_local: bool) -> Result<u8, &'static str> {
-        for upvalue in self.upvalues.iter() {
+        for (upvalue_index, upvalue) in self.upvalues.iter().enumerate() {
             if upvalue.index == index && upvalue.is_local == is_local {
-                return Ok(upvalue.index);
+                return Ok(upvalue_index as u8);
             }
         }
 
