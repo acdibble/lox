@@ -279,7 +279,7 @@ impl<'a> CompilerWrapper<'a> {
         if !unique {
             return self.error(
                 Some(name.lexeme),
-                "Already a variable with this name in this scope.",
+                "Already variable with this name in this scope.",
             );
         }
 

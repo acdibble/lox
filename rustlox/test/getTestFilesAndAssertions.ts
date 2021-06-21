@@ -2,7 +2,7 @@ import * as path from "https://deno.land/std@0.99.0/path/mod.ts";
 
 type FileExpectation =
   | { code: 0 | 65; expectations: string[] }
-  | { code: 70; error: string };
+  | { code: 65 | 70; error: string };
 
 const parseTestFile = async (filename: string): Promise<FileExpectation> => {
   const file = await Deno.readTextFile(filename);
@@ -11,6 +11,13 @@ const parseTestFile = async (filename: string): Promise<FileExpectation> => {
 
   if (runtimeError) {
     return { code: 70, error: runtimeError };
+  }
+
+  const errorAtRegExp = /\/\/ (Error at '.+)/;
+
+  if (errorAtRegExp.test(file)) {
+    const [, error] = errorAtRegExp.exec(file)!;
+    return { code: 65, error };
   }
 
   const parseErrorRegExp = /\/\/ \[/g;
