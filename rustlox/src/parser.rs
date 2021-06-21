@@ -499,8 +499,12 @@ impl<'a> Parser<'a> {
     fn call(&mut self) -> ParseResult<Expr<'a>> {
         let mut expr = self.primary()?;
 
-        if self.match_current(TokenKind::LeftParen) {
-            expr = self.finish_call(expr)?;
+        loop {
+            if self.match_current(TokenKind::LeftParen) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
         }
 
         Ok(expr)
