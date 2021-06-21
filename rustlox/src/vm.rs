@@ -306,15 +306,13 @@ impl VM {
     fn run(&mut self) -> Result<()> {
         macro_rules! binary_op {
             ($op: tt, $variant: ident) => {{
-                let value = match (self.peek(0)?, self.peek(1)?) {
+                let value = match (self.pop()?, self.pop()?) {
                 (Value::Number(b), Value::Number(a)) => (a $op b),
                 _ => {
                     return self.runtime_error("Operands must be numbers.");
                 }
                 };
 
-                self.pop()?;
-                self.pop()?;
                 self.push(Value::$variant(value))?
             }};
         }
@@ -413,7 +411,7 @@ impl VM {
                 Op::Greater => binary_op!(>, Bool),
                 Op::Less => binary_op!(<, Bool),
                 Op::Add => {
-                    let value = match (self.peek(0)?, self.peek(1)?) {
+                    let value = match (self.pop()?, self.pop()?) {
                         (Value::Number(b), Value::Number(a)) => Value::Number(a + b),
                         (Value::String(b), Value::String(a)) => Value::String(a + b),
                         _ => {
@@ -422,8 +420,6 @@ impl VM {
                         }
                     };
 
-                    self.pop()?;
-                    self.pop()?;
                     self.push(value)?
                 }
                 Op::Subtract => binary_op!(-, Number),

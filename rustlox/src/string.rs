@@ -20,9 +20,9 @@ impl Handle {
     }
 }
 
-impl ops::Add<&Handle> for &Handle {
+impl ops::Add<Handle> for Handle {
     type Output = Handle;
-    fn add(self, other: &Handle) -> <Self as std::ops::Add<&Handle>>::Output {
+    fn add(self, other: Handle) -> <Self as std::ops::Add<Handle>>::Output {
         let string = format!("{}{}", self, other);
         Handle::from_str(string.as_str())
     }
