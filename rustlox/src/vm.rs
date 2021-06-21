@@ -68,7 +68,7 @@ pub fn interpret(source: &String) -> Result<()> {
             return Ok(());
         }
         let closure = Closure::new(compile(tokens)?);
-        vm.push(Value::Closure(closure.clone()));
+        vm.push(Value::Closure(closure.clone()))?;
         vm.call(closure, 0).ok();
         vm.run()
     })
@@ -144,9 +144,13 @@ impl VM {
     }
 
     #[inline(always)]
-    fn push(&mut self, value: Value) {
+    fn push(&mut self, value: Value) -> Result<()> {
+        if self.stack_count == STACK_MAX {
+            return self.runtime_error("Stack overflow.");
+        }
         self.stack[self.stack_count] = value;
         self.stack_count += 1;
+        Ok(())
     }
 
     #[inline(always)]
@@ -186,7 +190,7 @@ impl VM {
         frame.ip = 0;
         self.frame_count += 1;
 
-        if self.frame_count == STACK_MAX {
+        if self.frame_count == CALL_FRAME_MAX {
             return self.runtime_error("Stack overflow.");
         }
 
@@ -311,7 +315,7 @@ impl VM {
 
                 self.pop()?;
                 self.pop()?;
-                self.push(Value::$variant(value))
+                self.push(Value::$variant(value))?
             }};
         }
 
@@ -340,18 +344,18 @@ impl VM {
             match instruction {
                 Op::Constant => {
                     let constant = self.read_constant()?.clone();
-                    self.push(constant);
+                    self.push(constant)?
                 }
-                Op::Nil => self.push(Value::Nil),
-                Op::True => self.push(Value::Bool(true)),
-                Op::False => self.push(Value::Bool(false)),
+                Op::Nil => self.push(Value::Nil)?,
+                Op::True => self.push(Value::Bool(true))?,
+                Op::False => self.push(Value::Bool(false))?,
                 Op::Pop => {
                     self.pop()?;
                 }
                 Op::GetLocal => {
                     let slot: usize = self.read_u8()?.into();
                     let offset = self.current_frame().starts_at;
-                    self.push(self.stack[slot + offset].clone());
+                    self.push(self.stack[slot + offset].clone())?
                 }
                 Op::SetLocal => {
                     let slot: usize = self.read_u8()?.into();
@@ -363,7 +367,7 @@ impl VM {
                     match self.globals.get(name) {
                         Some(value) => {
                             let clone = value.clone();
-                            self.push(clone);
+                            self.push(clone)?
                         }
                         _ => {
                             let error = format!("Undefined variable '{}'.", name);
@@ -390,7 +394,7 @@ impl VM {
                     let value = self.current_frame().closure.as_ref().unwrap().upvalues[slot]
                         .borrow()
                         .as_value();
-                    self.push(value)
+                    self.push(value)?
                 }
                 Op::SetUpvalue => {
                     let slot = self.read_u8()? as usize;
@@ -404,7 +408,7 @@ impl VM {
                 Op::Equal => {
                     let b = self.pop()?;
                     let a = self.pop()?;
-                    self.push(Value::Bool(a == b));
+                    self.push(Value::Bool(a == b))?
                 }
                 Op::Greater => binary_op!(>, Bool),
                 Op::Less => binary_op!(<, Bool),
@@ -420,14 +424,14 @@ impl VM {
 
                     self.pop()?;
                     self.pop()?;
-                    self.push(value);
+                    self.push(value)?
                 }
                 Op::Subtract => binary_op!(-, Number),
                 Op::Multiply => binary_op!(*, Number),
                 Op::Divide => binary_op!(/, Number),
                 Op::Not => {
                     let value = self.pop()?.is_falsy();
-                    self.push(Value::Bool(value))
+                    self.push(Value::Bool(value))?
                 }
                 Op::Negate => {
                     let num = match self.pop()? {
@@ -436,7 +440,7 @@ impl VM {
                             return self.runtime_error("Operand must be a number.");
                         }
                     };
-                    self.push(Value::Number(-num))
+                    self.push(Value::Number(-num))?
                 }
                 Op::Print => {
                     self.pop()?.println();
@@ -484,7 +488,7 @@ impl VM {
                         };
                         closure.upvalues.push(upvalue)
                     }
-                    self.push(Value::Closure(closure));
+                    self.push(Value::Closure(closure))?
                 }
                 Op::CloseUpvalue => {
                     self.close_upvalues(&self.stack[self.stack_count - 1]);
@@ -501,7 +505,7 @@ impl VM {
                     }
 
                     self.stack_count = starts_at;
-                    self.push(result)
+                    self.push(result)?
                 }
             }
         }
