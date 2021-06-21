@@ -351,7 +351,7 @@ impl<'a> Parser<'a> {
                 }));
             }
 
-            self.error(Some(equals), "Invalid assignment target");
+            self.error(Some(equals), "Invalid assignment target.");
         }
 
         Ok(expr)
