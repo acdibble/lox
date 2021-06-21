@@ -105,9 +105,11 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn add_constant(&mut self, value: Value) -> u8 {
+    pub fn add_constant(&mut self, value: Value) -> Result<u8, &'static str> {
         self.constants.push(value);
-        (self.constants.len() - 1).try_into().unwrap()
+        (self.constants.len() - 1)
+            .try_into()
+            .or(Err("Too many constants in one chunk."))
     }
 }
 
