@@ -237,10 +237,7 @@ impl VM {
 
         let created_upvalue = Rc::new(RefCell::new(Upvalue::new(
             location,
-            match current {
-                Some(value) => Some(Rc::clone(value)),
-                None => None,
-            },
+            current.as_ref().map(|value| Rc::clone(&value)),
         )));
 
         if previous.is_none() {
@@ -259,10 +256,7 @@ impl VM {
         {
             let rc = self.open_upvalues.as_ref().unwrap();
             let mut upvalue = rc.borrow_mut();
-            let next = match &upvalue.next {
-                Some(value) => Some(Rc::clone(value)),
-                None => None,
-            };
+            let next = upvalue.next.as_ref().map(|value| Rc::clone(&value));
             upvalue.close();
             drop(upvalue);
             self.open_upvalues = next;

@@ -80,8 +80,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn add_upvalue(&mut self, index: u8, is_local: bool) -> Result<u8, &'static str> {
-        for (index, upvalue) in self.upvalues.iter().enumerate() {
-            if upvalue.index as usize == index && upvalue.is_local == is_local {
+        for upvalue in self.upvalues.iter() {
+            if upvalue.index == index && upvalue.is_local == is_local {
                 return Ok(upvalue.index);
             }
         }
@@ -103,8 +103,8 @@ impl<'a> Compiler<'a> {
             return Ok(Some(self.add_upvalue(local, true)?));
         }
 
-        if let Some(value) = self.with_enclosing_mut(|c| c.resolve_upvalue(name))? {
-            return Ok(Some(self.add_upvalue(value, false)?));
+        if let Some(upvalue) = self.with_enclosing_mut(|c| c.resolve_upvalue(name))? {
+            return Ok(Some(self.add_upvalue(upvalue, false)?));
         }
 
         Ok(None)
@@ -189,7 +189,7 @@ impl<'a> CompilerWrapper<'a> {
         };
 
         self.emit_byte((offset >> 8) as u8 & 0xff);
-        self.emit_byte((offset & 0xff) as u8);
+        self.emit_byte(offset as u8 & 0xff);
         Ok(())
     }
 
@@ -244,8 +244,7 @@ impl<'a> CompilerWrapper<'a> {
             self.error(None, "Too many local variables in function.")?;
         }
 
-        Ok(self
-            .current
+        self.current
             .as_ref()
             .unwrap()
             .borrow_mut()
@@ -254,7 +253,8 @@ impl<'a> CompilerWrapper<'a> {
                 name: name.lexeme,
                 depth: None,
                 is_captured: false,
-            }))
+            });
+        Ok(())
     }
 
     fn declare_variable(&mut self, name: &'a Token<'a>) -> CompileResult {
