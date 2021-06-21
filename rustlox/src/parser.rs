@@ -267,6 +267,9 @@ impl<'a> Parser<'a> {
     }
 
     fn return_statement(&mut self) -> ParseResult<Stmt<'a>> {
+        if self.function_kind == FunctionKind::Script {
+            self.error(self.previous(), "Can't return from top-level code.")
+        }
         let keyword = self.previous().unwrap();
         let value = if !self.check(TokenKind::Semicolon) {
             Some(self.expression()?)

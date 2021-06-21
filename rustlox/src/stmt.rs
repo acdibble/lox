@@ -29,7 +29,7 @@ pub struct For<'a> {
     pub body: Box<Stmt<'a>>,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum FunctionKind {
     Script,
     Function,
