@@ -307,6 +307,7 @@ impl<'a> Parser<'a> {
     fn block_statement(&mut self) -> ParseResult<Stmt<'a>> {
         Ok(Stmt::Block(stmt::Block {
             statements: self.block()?,
+            brace: self.previous().unwrap(),
         }))
     }
 

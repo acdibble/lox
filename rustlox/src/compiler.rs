@@ -427,6 +427,7 @@ impl<'a> CompilerWrapper<'a> {
             self.statement(stmt)?;
         }
         self.end_scope();
+        self.current_line = statement.brace.line;
         Ok(())
     }
 

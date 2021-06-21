@@ -3,6 +3,7 @@ use crate::scanner::Token;
 
 #[derive(Debug)]
 pub struct Block<'a> {
+    pub brace: &'a Token<'a>,
     pub statements: Vec<Stmt<'a>>,
 }
 
