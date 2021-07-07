@@ -15,7 +15,7 @@ Object.entries(filesAndAssertions).map(([filename, fileResult]) => {
       "target/release/rustlox",
       filename,
     );
-    assertEquals(code, fileResult.code);
+    assertEquals(code, fileResult.code, stderr);
     if (
       (fileResult.code === 0 || fileResult.code === 65) &&
       "expectations" in fileResult

@@ -15,11 +15,12 @@ const runCommand = async (
     stderr: "piped",
   });
 
-  const { code } = await p.status();
+  const [{ code }, rawOutput, rawError] = await Promise.all([
+    p.status(),
+    p.output(),
+    p.stderrOutput(),
+  ]);
 
-  // Reading the outputs closes their pipes
-  const rawOutput = await p.output();
-  const rawError = await p.stderrOutput();
   p.close();
 
   return {

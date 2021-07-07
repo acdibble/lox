@@ -1,0 +1,3 @@
+if (true) {
+  break; // [line 2] Error at 'break': Unexpected 'break' statement.
+}

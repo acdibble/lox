@@ -1,0 +1,13 @@
+var result = "fail";
+
+while (true) {
+
+  while (1) {
+    break;
+  }
+
+  result = "pass";
+  break;
+}
+
+print result; // expect: pass

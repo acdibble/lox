@@ -1,0 +1,20 @@
+var result = "unset";
+var result2 = nil;
+
+while (true) {
+  result = "before break";
+  break;
+  result2 = "after break";
+}
+
+print result; // expect: before break
+print result2; // expect: nil
+
+var value = 0;
+
+while (true) {
+  value = value + 1;
+  break;
+}
+
+print value; // expect: 1

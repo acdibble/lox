@@ -1,0 +1,13 @@
+var i = 0;
+var j = 0;
+var afterCont = false;
+
+for (; i < 5; i = i + 1) {
+  j = i * 2;
+  continue;
+  afterCont = true;
+}
+
+print i; // expect: 5
+print j; // expect: 8
+print afterCont; // expect: false

@@ -1,0 +1,13 @@
+var result = "fail";
+
+for (;;) {
+
+  for (;;) {
+    break;
+  }
+
+  result = "pass";
+  break;
+}
+
+print result; // expect: pass
