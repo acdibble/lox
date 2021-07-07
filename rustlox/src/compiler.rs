@@ -208,10 +208,7 @@ impl<'a> CompilerWrapper<'a> {
     fn make_constant(&mut self, value: Value, lexeme: &str) -> CompileResult<u8> {
         match self.with_current_chunk_mut(|chunk| chunk.add_constant(value)) {
             Ok(value) => Ok(value),
-            Err(message) => {
-                self.error(Some(lexeme), message)?;
-                unreachable!()
-            }
+            Err(message) => self.error(Some(lexeme), message),
         }
     }
 
@@ -399,7 +396,7 @@ impl<'a> CompilerWrapper<'a> {
         Ok(compiler.function)
     }
 
-    fn error(&mut self, lexeme: Option<&str>, message: &'static str) -> CompileResult<()> {
+    fn error<T>(&mut self, lexeme: Option<&str>, message: &'static str) -> CompileResult<T> {
         if let Some(lex) = lexeme {
             eprint!("Error at '{}': ", lex);
         }
@@ -649,13 +646,13 @@ impl<'a> CompilerWrapper<'a> {
     ) -> Result<(Op, u8), InterpretError> {
         match self.with_current(|c| c.resolve_local(name)) {
             Ok(Some(result)) => return Ok((local, result)),
-            Err(message) => return self.error(Some(name), message).and(Ok((local, 0))),
+            Err(message) => return self.error(Some(name), message),
             _ => (),
         };
 
         match self.with_current_mut(|c| c.resolve_upvalue(name)) {
             Ok(Some(result)) => return Ok((upvalue, result)),
-            Err(message) => return self.error(Some(name), message).and(Ok((upvalue, 0))),
+            Err(message) => return self.error(Some(name), message),
             _ => (),
         }
 
