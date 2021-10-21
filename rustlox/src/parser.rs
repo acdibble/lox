@@ -108,6 +108,7 @@ impl<'a> Parser<'a> {
         if self.match_current(TokenKind::Fun) {
             return self.function(FunctionKind::Function);
         }
+
         if self.match_current(TokenKind::Var) {
             return self.var_declaration();
         }

@@ -178,15 +178,10 @@ impl<'a> CompilerWrapper<'a> {
     fn emit_loop(&mut self, loop_start: usize) -> CompileResult<()> {
         self.emit_op(Op::Loop);
 
-        let offset: u16 = match self
+        let offset: u16 = self
             .with_current_chunk(|chunk| chunk.code.len() - loop_start + 2)
             .try_into()
-        {
-            Ok(val) => val,
-            Err(_) => {
-                return self.error(None, "Loop body too large.");
-            }
-        };
+            .or_else(|_| self.error(None, "Loop body too large."))?;
 
         self.emit_byte((offset >> 8) as u8 & 0xff);
         self.emit_byte(offset as u8 & 0xff);
@@ -206,10 +201,8 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn make_constant(&mut self, value: Value, lexeme: &str) -> CompileResult<u8> {
-        match self.with_current_chunk_mut(|chunk| chunk.add_constant(value)) {
-            Ok(value) => Ok(value),
-            Err(message) => self.error(Some(lexeme), message),
-        }
+        self.with_current_chunk_mut(|chunk| chunk.add_constant(value))
+            .or_else(|message| self.error(Some(lexeme), message))
     }
 
     fn emit_constant(&mut self, value: Value, lexeme: &str) -> CompileResult<()> {
@@ -219,15 +212,10 @@ impl<'a> CompilerWrapper<'a> {
     }
 
     fn patch_jump(&mut self, offset: usize) -> CompileResult<()> {
-        let jump: u16 = match self
+        let jump: u16 = self
             .with_current_chunk(|chunk| chunk.code.len() - offset - 2)
             .try_into()
-        {
-            Ok(value) => value,
-            Err(_) => {
-                return self.error(None, "Too much code to jump over.");
-            }
-        };
+            .or_else(|_| self.error(None, "Too much code to jump over."))?;
 
         self.with_current_chunk_mut(|chunk| chunk.code[offset] = ((jump >> 8) & 0xff) as u8);
         self.with_current_chunk_mut(|chunk| chunk.code[offset + 1] = (jump & 0xff) as u8);
@@ -776,11 +764,9 @@ impl<'a> CompilerWrapper<'a> {
 }
 
 pub fn compile<'a>(tokens: Vec<Token<'a>>) -> Result<Function, InterpretError> {
-    let statements = parser::parse_tokens(&tokens);
-    if statements.is_none() {
-        return Err(InterpretError::CompileError);
-    }
-    let statements = statements.unwrap().into_iter();
+    let statements = parser::parse_tokens(&tokens)
+        .ok_or(InterpretError::CompileError)?
+        .into_iter();
     let mut compiler = CompilerWrapper::new();
     compiler.compile(statements)
 }

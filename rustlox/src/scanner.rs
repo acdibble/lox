@@ -110,11 +110,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn get_lexeme(&mut self) -> &'a str {
-        let end = if let Some((number, _)) = self.iter.peek() {
-            *number
-        } else {
-            self.source.len()
-        };
+        let end = self
+            .iter
+            .peek()
+            .map(|(number, _)| *number)
+            .unwrap_or(self.source.len());
 
         &self.source[self.start..end]
     }
@@ -136,13 +136,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn peek_next(&mut self) -> Option<(usize, char)> {
-        if let Some((n, _)) = self.iter.peek() {
-            if let Some(byte) = self.source.as_bytes().get(n + 1) {
-                return Some((n + 1, *byte as char));
-            }
-        }
+        let (n, _) = self.iter.peek()?;
 
-        None
+        let byte = self.source.as_bytes().get(n + 1)?;
+
+        return Some((n + 1, *byte as char));
     }
 
     fn string(&mut self) -> Token<'a> {
@@ -163,12 +161,12 @@ impl<'a> Scanner<'a> {
         self.consume_while(|c| c.is_digit(10));
 
         // Look for a fractional part.
-        if let Some((_, '.')) = self.iter.peek() {
-            if let Some((_, '0'..='9')) = self.peek_next() {
-                // Consume the ".".
-                self.advance();
-                self.consume_while(|c| c.is_digit(10));
-            }
+        if matches!(self.iter.peek(), Some((_, '.')))
+            && matches!(self.peek_next(), Some((_, '0'..='9')))
+        {
+            // Consume the ".".
+            self.advance();
+            self.consume_while(|c| c.is_digit(10));
         }
 
         self.make_token(TokenKind::Number)
@@ -214,13 +212,7 @@ impl<'a> Iterator for Scanner<'a> {
     fn next(&mut self) -> Option<Token<'a>> {
         self.skip_whitespace();
 
-        let next = self.advance();
-
-        if next.is_none() {
-            return None;
-        }
-
-        let (start, c) = next.unwrap();
+        let (start, c) = self.advance()?;
         self.start = start;
 
         let token = match c {

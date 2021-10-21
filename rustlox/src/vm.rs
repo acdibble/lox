@@ -165,10 +165,9 @@ impl VM {
 
     #[inline(always)]
     fn peek(&self, index: usize) -> Result<&Value> {
-        match self.stack.get(self.stack_count - 1 - index) {
-            Some(value) => Ok(value),
-            None => Err(InterpretError::InternalError("Can't peek on empty stack.")),
-        }
+        self.stack
+            .get(self.stack_count - 1 - index)
+            .ok_or(InterpretError::InternalError("Can't peek on empty stack."))
     }
 
     #[inline(always)]
@@ -273,19 +272,20 @@ impl VM {
         let ip = frame.ip;
         frame.ip += 1;
         let chunk = self.current_chunk();
-        match chunk.code.get(ip) {
-            Some(byte) => Ok(*byte),
-            _ => return Err(InterpretError::InternalError("Failed to read byte.")),
-        }
+        chunk
+            .code
+            .get(ip)
+            .map(|value| *value)
+            .ok_or(InterpretError::InternalError("Failed to read byte."))
     }
 
     #[inline(always)]
     fn read_constant(&mut self) -> Result<&Value> {
         let constant: usize = self.read_u8()?.into();
-        match self.current_chunk().constants.get(constant) {
-            Some(value) => Ok(value),
-            _ => return Err(InterpretError::InternalError("Failed to read constant.")),
-        }
+        self.current_chunk()
+            .constants
+            .get(constant)
+            .ok_or(InterpretError::InternalError("Failed to read constant."))
     }
 
     #[inline(always)]
@@ -299,7 +299,7 @@ impl VM {
     fn read_string(&mut self) -> Result<&string::Handle> {
         match self.read_constant()? {
             Value::String(handle) => Ok(handle),
-            _ => return Err(InterpretError::InternalError("Value was not a string.")),
+            _ => Err(InterpretError::InternalError("Value was not a string.")),
         }
     }
 
